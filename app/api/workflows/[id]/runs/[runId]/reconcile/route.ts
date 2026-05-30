@@ -145,6 +145,20 @@ export async function POST(
         data: { status: "idle" },
       });
 
+      // Reconcile credits in fallback/reconcile endpoint
+      try {
+        const holdLedger = await prisma.creditLedger.findFirst({
+          where: { runId, type: "hold" },
+        });
+        const holdAmount = holdLedger ? Math.abs(holdLedger.amount) : 0;
+        const actualCost = updatedNodeRuns.reduce((sum, r) => sum + (r.creditCost ?? 0), 0);
+
+        const { reconcileWorkflowCredits } = await import("@/lib/credits");
+        await reconcileWorkflowCredits(userId, runId, actualCost, holdAmount);
+      } catch (creditErr) {
+        console.error(`Failed to reconcile credits in route handler for run ${runId}:`, creditErr);
+      }
+
       return NextResponse.json({
         data: {
           reconciled: true,

@@ -831,6 +831,21 @@ export const workflowOrchestratorTask = task({
           data: { status: "idle" },
         });
 
+        // Reconcile credits
+        try {
+          const holdLedger = await getPrisma().creditLedger.findFirst({
+            where: { runId, type: "hold" },
+          });
+          const holdAmount = holdLedger ? Math.abs(holdLedger.amount) : 0;
+          const actualCost = terminalRuns.reduce((sum, r) => sum + (r.creditCost ?? 0), 0);
+
+          const { reconcileWorkflowCredits } = await import("../lib/credits");
+          await reconcileWorkflowCredits(run.userId, runId, actualCost, holdAmount);
+          logger.info(`[Coordinator] Credits reconciled for run ${runId}. Hold: ${holdAmount}, Actual: ${actualCost}`);
+        } catch (creditErr) {
+          logger.error(`[Coordinator] Failed to reconcile credits for run ${runId}: ${creditErr}`);
+        }
+
         // Set finalStatus and finalized nodeStates on root run metadata
         await updateRootMetadata(targetOrchestratorRunId, nodeStates, finalStatus);
 

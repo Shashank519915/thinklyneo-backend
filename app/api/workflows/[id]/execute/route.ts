@@ -11,6 +11,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { Prisma } from "@prisma/client";
 import { z } from "zod";
+import { estimateWorkflowCost, getOrCreateBalance } from "@/lib/credits";
 
 const executeSchema = z.object({
   scope: z.enum(["full", "partial", "single"]).default("full"),
@@ -83,22 +84,62 @@ export async function POST(
 
     const { scope, inputValues = {}, nodeIds, existingOutputs = {} } = parsed.data;
 
-    // Create WorkflowRun
-    const run = await prisma.workflowRun.create({
-      data: {
-        workflowId: id,
-        userId,
-        scope,
-        status: "running",
-        startedAt: new Date(),
-        inputValues: (inputValues ?? Prisma.JsonNull) as Prisma.InputJsonValue,
-      },
-    });
+    const allNodes = (workflow.nodes as any[]) ?? [];
+    const targetNodes = scope === "full"
+      ? allNodes
+      : allNodes.filter((n) => nodeIds?.includes(n.id));
 
-    // Mark workflow as running
-    await prisma.workflow.update({
-      where: { id },
-      data: { status: "running" },
+    const estimatedCost = estimateWorkflowCost(targetNodes);
+
+    // Create run and place hold transactionally
+    const run = await prisma.$transaction(async (tx) => {
+      // Get or initialize user balance inside tx to secure grant
+      const balance = await getOrCreateBalance(userId, tx);
+      if (balance < estimatedCost) {
+        throw new Error(
+          `Insufficient credits. Estimated cost: ${(estimatedCost / 1000000).toFixed(2)}M, but your balance is ${(balance / 1000000).toFixed(2)}M.`
+        );
+      }
+
+      // Create WorkflowRun
+      const newRun = await tx.workflowRun.create({
+        data: {
+          workflowId: id,
+          userId,
+          scope,
+          status: "running",
+          startedAt: new Date(),
+          inputValues: (inputValues ?? Prisma.JsonNull) as Prisma.InputJsonValue,
+        },
+      });
+
+      // Place hold if estimatedCost > 0
+      if (estimatedCost > 0) {
+        const nextBalance = balance - estimatedCost;
+        await tx.creditBalance.update({
+          where: { userId },
+          data: { balance: nextBalance },
+        });
+
+        await tx.creditLedger.create({
+          data: {
+            userId,
+            amount: -estimatedCost,
+            type: "hold",
+            description: `Hold for workflow execution run ${newRun.id}`,
+            runId: newRun.id,
+            balanceAfter: nextBalance,
+          },
+        });
+      }
+
+      // Mark workflow as running
+      await tx.workflow.update({
+        where: { id },
+        data: { status: "running" },
+      });
+
+      return newRun;
     });
 
     // Serialize the graph for the orchestrator

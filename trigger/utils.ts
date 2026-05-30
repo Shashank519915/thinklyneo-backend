@@ -12,6 +12,12 @@ interface NotifyCoordinatorParams {
   durationMs: number;
   orchestratorRunId: string;
   waitpointTokenId: string;
+
+  // Audit and Credit details
+  providerUsed?: string | null;
+  providerAttempts?: any;
+  logs?: string | null;
+  creditCost?: number | null;
 }
 
 /**
@@ -29,6 +35,10 @@ export async function notifyCoordinator(params: NotifyCoordinatorParams) {
     durationMs,
     orchestratorRunId,
     waitpointTokenId,
+    providerUsed,
+    providerAttempts,
+    logs,
+    creditCost,
   } = params;
 
   const now = new Date();
@@ -48,6 +58,10 @@ export async function notifyCoordinator(params: NotifyCoordinatorParams) {
         durationMs,
         output: (output ?? Prisma.JsonNull) as Prisma.InputJsonValue,
         error: error ?? null,
+        providerUsed: providerUsed ?? null,
+        providerAttempts: (providerAttempts ?? Prisma.JsonNull) as Prisma.InputJsonValue,
+        logs: logs ?? null,
+        creditCost: creditCost ?? null,
       },
     });
   } catch (dbErr) {
