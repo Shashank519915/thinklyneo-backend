@@ -3,11 +3,24 @@
  */
 
 import { prisma } from "./prisma";
-import { cropImageDefinition, openrouterLlmDefinition } from "@galaxy/shared";
+import {
+  cropImageDefinition,
+  openrouterLlmDefinition,
+  gptImage2Definition,
+  klingV3Definition,
+  mergeVideoDefinition,
+  mergeAVDefinition,
+  extractAudioDefinition,
+} from "@galaxy/shared";
 
 const DEFINITIONS: Record<string, any> = {
   cropImage: cropImageDefinition,
   gemini: openrouterLlmDefinition,
+  gptImage2: gptImage2Definition,
+  klingV3: klingV3Definition,
+  mergeVideo: mergeVideoDefinition,
+  mergeAV: mergeAVDefinition,
+  extractAudio: extractAudioDefinition,
 };
 
 const INITIAL_GRANT_MICROCREDITS = 100000000; // 100.00 credits

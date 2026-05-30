@@ -499,6 +499,59 @@ async function triggerReadyNodes(params: TriggerReadyNodesParams) {
           waitpointTokenId,
           workflowId,
         });
+      } else if (node.type === "gptImage2") {
+        await tasks.trigger("gpt-image-2", {
+          prompt: (resolvedInputs["prompt"] as string) ?? "",
+          negativePrompt: (resolvedInputs["negativePrompt"] as string) ?? "",
+          aspectRatio: (resolvedInputs["aspectRatio"] as any) ?? "1:1",
+          runId,
+          nodeRunId: node.id,
+          orchestratorRunId,
+          waitpointTokenId,
+          workflowId,
+        });
+      } else if (node.type === "klingV3") {
+        await tasks.trigger("kling-v3", {
+          prompt: (resolvedInputs["prompt"] as string) ?? "",
+          inputImage: (resolvedInputs["inputImage"] as string) ?? null,
+          aspectRatio: (resolvedInputs["aspectRatio"] as any) ?? "16:9",
+          duration: (resolvedInputs["duration"] as any) ?? "5s",
+          runId,
+          nodeRunId: node.id,
+          orchestratorRunId,
+          waitpointTokenId,
+          workflowId,
+        });
+      } else if (node.type === "mergeVideo") {
+        await tasks.trigger("merge-video", {
+          videoUrl1: (resolvedInputs["videoUrl1"] as string) ?? "",
+          videoUrl2: (resolvedInputs["videoUrl2"] as string) ?? "",
+          videoUrl3: (resolvedInputs["videoUrl3"] as string) ?? null,
+          runId,
+          nodeRunId: node.id,
+          orchestratorRunId,
+          waitpointTokenId,
+          workflowId,
+        });
+      } else if (node.type === "mergeAV") {
+        await tasks.trigger("merge-av", {
+          videoUrl: (resolvedInputs["videoUrl"] as string) ?? "",
+          audioUrl: (resolvedInputs["audioUrl"] as string) ?? "",
+          runId,
+          nodeRunId: node.id,
+          orchestratorRunId,
+          waitpointTokenId,
+          workflowId,
+        });
+      } else if (node.type === "extractAudio") {
+        await tasks.trigger("extract-audio", {
+          videoUrl: (resolvedInputs["videoUrl"] as string) ?? "",
+          runId,
+          nodeRunId: node.id,
+          orchestratorRunId,
+          waitpointTokenId,
+          workflowId,
+        });
       } else {
         logger.error(`[Orchestrator] Unknown node type: ${node.type}`);
         await getPrisma().nodeRun.update({
