@@ -1,13 +1,8 @@
-import { clerkMiddleware, createRouteMatcher } from "@clerk/nextjs/server";
+import { clerkMiddleware } from "@clerk/nextjs/server";
 
-/** Public API paths if any (all matched by default here) */
-const isPublicRoute = createRouteMatcher(["/api/public(.*)"]);
-
-export default clerkMiddleware(async (auth, request) => {
-  if (!isPublicRoute(request)) {
-    await auth.protect();
-  }
-});
+// Parse Clerk authentication tokens/cookies for API routes without enforcing redirects at the middleware layer.
+// The API routes themselves will check auth() and return 401 JSON responses if needed.
+export default clerkMiddleware();
 
 export const config = {
   matcher: [
