@@ -1,0 +1,135 @@
+import { z } from "zod";
+import { NodeDefinition } from "../types/node.types";
+
+export const openrouterLlmInputSchema = z.object({
+  prompt: z.string({ required_error: "Prompt is required" }).min(1, "Prompt is required"),
+  systemPrompt: z.string().nullable().optional(),
+  images: z.array(z.string()).optional(),
+  video: z.string().nullable().optional(),
+  audio: z.string().nullable().optional(),
+  file: z.string().nullable().optional(),
+  temperature: z.number().min(0).max(2).optional(),
+  maxTokens: z.number().min(1).max(8192).optional(),
+  topP: z.number().min(0).max(1).optional(),
+});
+
+export const openrouterLlmOutputSchema = z.object({
+  response: z.string(),
+});
+
+export const openrouterLlmDefinition: NodeDefinition = {
+  type: "gemini", // Keep "gemini" React Flow type for database backward compatibility
+  name: "OpenRouter LLM",
+  category: "text",
+  icon: "Sparkles",
+  color: "blue",
+  credits: {
+    base: 450000, // 0.45M microcredits
+  },
+  inputs: [
+    {
+      key: "prompt",
+      label: "Prompt",
+      type: "textarea",
+      required: true,
+      group: "primary",
+      handle: {
+        type: "text",
+        color: "#3B82F6",
+      },
+    },
+    {
+      key: "systemPrompt",
+      label: "System Prompt",
+      type: "textarea",
+      group: "advanced",
+      defaultValue: "",
+      handle: {
+        type: "text",
+        color: "#3B82F6",
+      },
+    },
+    {
+      key: "images",
+      label: "Input Images",
+      type: "image-array",
+      group: "primary",
+      handle: {
+        type: "image",
+        color: "#F97316",
+      },
+    },
+    {
+      key: "video",
+      label: "Input Video",
+      type: "file-upload",
+      group: "primary",
+      handle: {
+        type: "video",
+        color: "#3B82F6",
+      },
+    },
+    {
+      key: "audio",
+      label: "Input Audio",
+      type: "file-upload",
+      group: "primary",
+      handle: {
+        type: "audio",
+        color: "#10B981",
+      },
+    },
+    {
+      key: "file",
+      label: "Input Document",
+      type: "file-upload",
+      group: "primary",
+      handle: {
+        type: "file",
+        color: "#6B7280",
+      },
+    },
+    {
+      key: "temperature",
+      label: "Temperature",
+      type: "slider",
+      defaultValue: 1.0,
+      min: 0.0,
+      max: 2.0,
+      step: 0.1,
+      group: "advanced",
+    },
+    {
+      key: "maxTokens",
+      label: "Max Tokens",
+      type: "number",
+      defaultValue: 2048,
+      min: 1,
+      max: 8192,
+      group: "advanced",
+    },
+    {
+      key: "topP",
+      label: "Top P",
+      type: "slider",
+      defaultValue: 0.95,
+      min: 0.0,
+      max: 1.0,
+      step: 0.05,
+      group: "advanced",
+    },
+  ],
+  outputs: [
+    {
+      key: "response",
+      label: "Response Text",
+      type: "text",
+      handle: {
+        type: "text",
+        color: "#3B82F6",
+      },
+    },
+  ],
+  inputSchema: openrouterLlmInputSchema,
+  outputSchema: openrouterLlmOutputSchema,
+};

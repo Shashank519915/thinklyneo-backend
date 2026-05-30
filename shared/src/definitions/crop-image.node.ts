@@ -1,0 +1,107 @@
+import { z } from "zod";
+import { NodeDefinition } from "../types/node.types";
+
+export const cropImageInputSchema = z.object({
+  inputImage: z.string({ required_error: "Input Image is required" }).min(1, "Input Image is required"),
+  x: z.number().min(0).max(100),
+  y: z.number().min(0).max(100),
+  w: z.number().min(1).max(100),
+  h: z.number().min(1).max(100),
+});
+
+export const cropImageOutputSchema = z.object({
+  outputImage: z.string().url(),
+});
+
+export const cropImageDefinition: NodeDefinition = {
+  type: "cropImage",
+  name: "Crop Image",
+  category: "image",
+  icon: "Crop",
+  color: "orange",
+  credits: {
+    base: 210000, // 0.21M microcredits
+  },
+  inputs: [
+    {
+      key: "inputImage",
+      label: "Input Image",
+      type: "file-upload",
+      required: true,
+      group: "primary",
+      handle: {
+        type: "image",
+        color: "#F97316",
+      },
+    },
+    {
+      key: "x",
+      label: "X Position (%)",
+      type: "slider",
+      defaultValue: 0,
+      min: 0,
+      max: 100,
+      step: 1,
+      group: "primary",
+      handle: {
+        type: "text",
+        color: "#EC4899",
+      },
+    },
+    {
+      key: "y",
+      label: "Y Position (%)",
+      type: "slider",
+      defaultValue: 0,
+      min: 0,
+      max: 100,
+      step: 1,
+      group: "primary",
+      handle: {
+        type: "text",
+        color: "#EC4899",
+      },
+    },
+    {
+      key: "w",
+      label: "Width (%)",
+      type: "slider",
+      defaultValue: 100,
+      min: 1,
+      max: 100,
+      step: 1,
+      group: "primary",
+      handle: {
+        type: "text",
+        color: "#EC4899",
+      },
+    },
+    {
+      key: "h",
+      label: "Height (%)",
+      type: "slider",
+      defaultValue: 100,
+      min: 1,
+      max: 100,
+      step: 1,
+      group: "primary",
+      handle: {
+        type: "text",
+        color: "#EC4899",
+      },
+    },
+  ],
+  outputs: [
+    {
+      key: "outputImage",
+      label: "Output Image",
+      type: "image",
+      handle: {
+        type: "image",
+        color: "#F97316",
+      },
+    },
+  ],
+  inputSchema: cropImageInputSchema,
+  outputSchema: cropImageOutputSchema,
+};
