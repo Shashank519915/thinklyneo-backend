@@ -1,0 +1,11 @@
+packages:
+  - "."
+  - "shared"
+
+allowBuilds:
+  "@clerk/shared": true
+  "@prisma/engines": true
+  "esbuild": true
+  "prisma": true
+  "protobufjs": true
+  "sharp": true

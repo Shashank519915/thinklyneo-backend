@@ -1,0 +1,63 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model User {
+  id        String     @id // Clerk userId
+  workflows Workflow[]
+  createdAt DateTime   @default(now())
+}
+
+model Workflow {
+  id          String        @id @default(cuid())
+  userId      String
+  user        User          @relation(fields: [userId], references: [id])
+  name        String
+  description String?
+  nodes       Json
+  edges       Json
+  status      String        @default("idle") // idle | running | done | error
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+  runs        WorkflowRun[]
+}
+
+model WorkflowRun {
+  id         String    @id @default(cuid())
+  workflowId String
+  workflow   Workflow  @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+  userId     String
+  scope      String // full | partial | single
+  status     String // success | failed | partial
+  startedAt  DateTime  @default(now())
+  finishedAt DateTime?
+  durationMs Int?
+  orchestratorRunId String?  // Trigger.dev orchestrator task run ID for SSE re-subscription
+  inputValues       Json?    // Original input values used to start the run
+  nodeRuns   NodeRun[]
+}
+
+model NodeRun {
+  id           String      @id @default(cuid())
+  runId        String
+  run          WorkflowRun @relation(fields: [runId], references: [id], onDelete: Cascade)
+  nodeId       String
+  nodeName     String
+  status       String // success | failed | skipped | running
+  startedAt    DateTime
+  finishedAt   DateTime?
+  durationMs   Int?
+  inputs       Json?
+  output       Json?
+  error        String?
+  triggerRunId String?
+
+  @@unique([runId, nodeId])
+}
