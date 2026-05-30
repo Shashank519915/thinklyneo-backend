@@ -19,6 +19,8 @@ const executeSchema = z.object({
   existingOutputs: z.record(z.any()).optional(),
 });
 
+export const maxDuration = 60;
+
 /**
  * POST /api/workflows/[id]/execute
  *

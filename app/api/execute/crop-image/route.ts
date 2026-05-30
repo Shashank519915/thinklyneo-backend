@@ -28,6 +28,8 @@ const cropSchema = z.object({
   nodeRunId: z.string(),
 });
 
+export const maxDuration = 60;
+
 /**
  * Upload a Buffer directly to Transloadit using their REST API (no filesystem needed).
  * Vercel serverless functions have no writable disk, so we can't use the Transloadit SDK's

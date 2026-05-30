@@ -26,6 +26,8 @@ const geminiSchema = z.object({
   nodeRunId: z.string(),
 });
 
+export const maxDuration = 60;
+
 async function runOpenRouterDirect(payload: {
   model: string;
   prompt: string;

@@ -10,9 +10,11 @@ datasource db {
 }
 
 model User {
-  id        String     @id // Clerk userId
+  id        String         @id // Clerk userId
   workflows Workflow[]
-  createdAt DateTime   @default(now())
+  balance   CreditBalance?
+  ledgers   CreditLedger[]
+  createdAt DateTime       @default(now())
 }
 
 model Workflow {
@@ -42,6 +44,7 @@ model WorkflowRun {
   orchestratorRunId String?  // Trigger.dev orchestrator task run ID for SSE re-subscription
   inputValues       Json?    // Original input values used to start the run
   nodeRuns   NodeRun[]
+  ledgers    CreditLedger[]
 }
 
 model NodeRun {
@@ -59,5 +62,33 @@ model NodeRun {
   error        String?
   triggerRunId String?
 
+  // New Audit Fields
+  providerUsed     String?     // ID of the provider that successfully executed the task
+  providerAttempts Json?       // Array tracking attempts
+  logs             String?     // Capture execution logs
+  creditCost       Int?        // Actual microcredits consumed by this node run
+
   @@unique([runId, nodeId])
+}
+
+model CreditBalance {
+  id        String   @id @default(cuid())
+  userId    String   @unique
+  balance   Int      @default(100000000) // Microcredits (1,000,000 = 1.00 credit; initial $100.00 = 100,000,000)
+  updatedAt DateTime @updatedAt
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model CreditLedger {
+  id           String       @id @default(cuid())
+  userId       String
+  amount       Int          // Negative for debits/holds, positive for refunds/grants
+  type         String       // initial_grant | hold | deduction | refund | topup
+  description  String?
+  runId        String?
+  nodeRunId    String?
+  balanceAfter Int
+  createdAt    DateTime     @default(now())
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  run          WorkflowRun? @relation(fields: [runId], references: [id], onDelete: SetNull)
 }
