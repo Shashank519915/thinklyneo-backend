@@ -41,8 +41,8 @@ async function callOpenRouterFree(payload: {
     throw new Error("OPENROUTER_API_KEY environment variable is not configured on backend");
   }
 
-  // Strictly use the free Llama-3.3-70b model
-  const targetModel = "meta-llama/llama-3.3-70b-instruct:free";
+  // Use the free Gemini-2.5-Flash model which supports multimodal (vision/image) inputs
+  const targetModel = "google/gemini-2.5-flash:free";
 
   const messages: any[] = [];
 
