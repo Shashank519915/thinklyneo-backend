@@ -3,26 +3,26 @@ import { NodeDefinition } from "../types/node.types";
 
 export const gptImage2InputSchema = z.object({
   prompt: z.string({ required_error: "Prompt is required" }).min(1, "Prompt is required"),
-  inputImage: z.string().nullable().optional(),
+  uploadedImages: z.array(z.string()).min(1, "At least one input image is required").optional().nullable(),
   size: z.enum(["auto", "1024x1024", "512x512"]).optional(),
   quality: z.enum(["high", "standard"]).optional(),
   n: z.enum(["1", "2", "3", "4"]).optional(),
-  negativePrompt: z.string().nullable().optional(),
-  aspectRatio: z.enum(["1:1", "16:9", "9:16"]).optional(),
+  background: z.enum(["auto", "transparent", "white", "black"]).optional(),
+  output_format: z.enum(["PNG", "JPG", "WEBP"]).optional(),
 });
 
 export const gptImage2OutputSchema = z.object({
-  outputImage: z.string().url(),
+  result: z.string().url(),
 });
 
 export const gptImage2Definition: NodeDefinition = {
   type: "gptImage2",
-  name: "GPT-Image-2",
+  name: "GPT Image 2",
   category: "image",
   icon: "Sparkles",
   color: "purple",
   credits: {
-    base: 210000, // Matches the reference ~0.21M microcredits
+    base: 210000, // Matches reference ~0.21M
   },
   inputs: [
     {
@@ -33,17 +33,18 @@ export const gptImage2Definition: NodeDefinition = {
       group: "primary",
       handle: {
         type: "text",
-        color: "#3B82F6",
+        color: "#f59e0b", // Yellow
       },
     },
     {
-      key: "inputImage",
-      label: "Input Image (Image-to-Image)",
-      type: "file-upload",
+      key: "uploadedImages",
+      label: "Input Images",
+      type: "image-array",
+      required: true,
       group: "primary",
       handle: {
         type: "image",
-        color: "#F97316",
+        color: "#3b82f6", // Blue
       },
     },
     {
@@ -59,7 +60,7 @@ export const gptImage2Definition: NodeDefinition = {
       ],
       handle: {
         type: "text",
-        color: "#F59E0B",
+        color: "#f59e0b", // Yellow
       },
     },
     {
@@ -74,7 +75,7 @@ export const gptImage2Definition: NodeDefinition = {
       ],
       handle: {
         type: "text",
-        color: "#F59E0B",
+        color: "#f59e0b", // Yellow
       },
     },
     {
@@ -91,41 +92,51 @@ export const gptImage2Definition: NodeDefinition = {
       ],
       handle: {
         type: "text",
-        color: "#EC4899",
+        color: "#ec4899", // Pink
       },
     },
     {
-      key: "negativePrompt",
-      label: "Negative Prompt",
-      type: "textarea",
-      group: "advanced",
-      defaultValue: "",
-      handle: {
-        type: "text",
-        color: "#3B82F6",
-      },
-    },
-    {
-      key: "aspectRatio",
-      label: "Aspect Ratio",
+      key: "background",
+      label: "Background",
       type: "select",
       group: "advanced",
-      defaultValue: "1:1",
+      defaultValue: "auto",
       options: [
-        { label: "1:1 Square", value: "1:1" },
-        { label: "16:9 Widescreen", value: "16:9" },
-        { label: "9:16 Portrait", value: "9:16" },
+        { label: "Auto", value: "auto" },
+        { label: "Transparent", value: "transparent" },
+        { label: "White", value: "white" },
+        { label: "Black", value: "black" },
       ],
+      handle: {
+        type: "text",
+        color: "#f59e0b", // Yellow
+      },
+    },
+    {
+      key: "output_format",
+      label: "Output Format",
+      type: "select",
+      group: "advanced",
+      defaultValue: "PNG",
+      options: [
+        { label: "PNG", value: "PNG" },
+        { label: "JPG", value: "JPG" },
+        { label: "WEBP", value: "WEBP" },
+      ],
+      handle: {
+        type: "text",
+        color: "#f59e0b", // Yellow
+      },
     },
   ],
   outputs: [
     {
-      key: "outputImage",
-      label: "Output Image",
+      key: "result",
+      label: "Generated Images",
       type: "image",
       handle: {
         type: "image",
-        color: "#F97316",
+        color: "#3b82f6", // Blue
       },
     },
   ],

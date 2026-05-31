@@ -121,7 +121,14 @@ function getHandleDataType(
   }
 
   // Standard handle IDs
-  if (handleId.includes("Image") || handleId.includes("image") || handleId === "in:inputImage" || handleId === "out:outputImage") return "image";
+  if (
+    handleId.includes("Image") ||
+    handleId.includes("image") ||
+    handleId === "in:inputImage" ||
+    handleId === "out:outputImage" ||
+    (handleId === "out:result" && nodeType === "gptImage2")
+  )
+    return "image";
   if (handleId === "in:images") return "image"; // gemini vision multi-input
   if (handleId.includes("Video") || handleId.includes("video")) return "video";
   if (handleId.includes("Audio") || handleId.includes("audio")) return "audio";
@@ -420,11 +427,12 @@ export async function executeDAG(ctx: ExecutionContext): Promise<void> {
       ) {
         // Extract the specific named output field (e.g. field_text_1, field_image_1)
         const obj = sourceOutput as Record<string, unknown>;
-        if (sourceHandle in obj) {
+        const cleanHandle = sourceHandle.replace(/^out:/, "");
+        if (cleanHandle in obj) {
+          valueToPass = obj[cleanHandle];
+        } else if (sourceHandle in obj) {
           valueToPass = obj[sourceHandle];
         }
-        // If sourceHandle is out:response or out:outputImage, value IS the whole output (scalar)
-        // Those cases: the output is already a scalar string/url, not an object
       }
 
       // Handle multi-image fan-in for Gemini Vision

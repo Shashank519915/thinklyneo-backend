@@ -151,7 +151,7 @@ export const gptImage2Task = task({
         runId,
         nodeId: nodeRunId,
         status: "success",
-        output: { outputImage: outputUrl }, // Matches gptImage2OutputSchema (expects { outputImage: string })
+        output: { result: outputUrl }, // Matches gptImage2OutputSchema (expects { result: string })
         durationMs,
         orchestratorRunId,
         waitpointTokenId,
@@ -162,6 +162,6 @@ export const gptImage2Task = task({
       });
     }
 
-    return { outputImage: outputUrl, runId, nodeRunId };
+    return { result: outputUrl, runId, nodeRunId };
   },
 });
