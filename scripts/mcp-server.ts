@@ -2,6 +2,7 @@ import dotenv from "dotenv";
 import path from "path";
 import { fileURLToPath } from "url";
 import crypto from "crypto";
+import { Prisma } from "@prisma/client";
 
 // Resolve paths for loading local env vars in development BEFORE prisma load
 const __filename = fileURLToPath(import.meta.url);
@@ -70,8 +71,7 @@ async function main() {
     ListToolsRequestSchema,
     McpError,
   } = await import("@modelcontextprotocol/sdk/types.js");
-  const { Prisma } = await import("@prisma/client");
-
+  
   async function getOrCreateBalance(userId: string): Promise<number> {
     const existing = await prisma.creditBalance.findUnique({
       where: { userId },
