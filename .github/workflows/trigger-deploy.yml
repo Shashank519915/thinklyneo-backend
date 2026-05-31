@@ -1,0 +1,36 @@
+name: Deploy Trigger.dev tasks
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "trigger/**"
+      - "trigger.config.ts"
+      - ".github/workflows/**"
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v3
+        with:
+          version: 10
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "pnpm"
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Generate Prisma Client
+        run: pnpm exec prisma generate
+
+      - name: Deploy Trigger.dev tasks
+        run: npx trigger.dev@latest deploy --native-build-server
+        env:
+          TRIGGER_ACCESS_TOKEN: ${{ secrets.TRIGGER_ACCESS_TOKEN }}
