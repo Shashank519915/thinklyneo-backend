@@ -7,6 +7,7 @@
 import { task, metadata, logger, wait, tasks } from "@trigger.dev/sdk/v3";
 import { Prisma } from "@prisma/client";
 import { prisma } from "../lib/prisma";
+import { triggerOutboundWebhook } from "../lib/webhooks";
 
 /** Returns the shared Prisma client singleton. */
 function getPrisma() {
@@ -421,6 +422,22 @@ async function triggerReadyNodes(params: TriggerReadyNodesParams) {
           },
         });
 
+        // Fire webhook notification for inline node completion
+        await triggerOutboundWebhook(
+          runId,
+          "node.completed",
+          terminalStatus === "success",
+          {
+            nodeId: node.id,
+            status: terminalStatus,
+            durationMs,
+            output,
+            creditCost: 0,
+            providerUsed: "inline",
+          },
+          error ?? null
+        );
+
         if (error) {
           nodeStates[node.id] = { status: "failed", error };
         } else {
@@ -452,6 +469,22 @@ async function triggerReadyNodes(params: TriggerReadyNodesParams) {
             error: errorMsg,
           },
         });
+
+        // Fire webhook notification for inline node crash
+        await triggerOutboundWebhook(
+          runId,
+          "node.completed",
+          false,
+          {
+            nodeId: node.id,
+            status: "failed",
+            durationMs,
+            output: null,
+            creditCost: 0,
+            providerUsed: "inline",
+          },
+          errorMsg
+        );
 
         nodeStates[node.id] = { status: "failed", error: errorMsg };
         await updateRootMetadata(orchestratorRunId, nodeStates);
@@ -877,6 +910,19 @@ export const workflowOrchestratorTask = task({
             durationMs,
           },
         });
+
+        // Trigger webhook delivery for run completion
+        await triggerOutboundWebhook(
+          runId,
+          finalStatus === "success" ? "run.completed" : "run.failed",
+          finalStatus === "success",
+          {
+            status: finalStatus,
+            durationMs,
+            outputs: Object.fromEntries(resolvedOutputs),
+          },
+          finalStatus === "failed" ? "Execution failed" : null
+        );
 
         // Set workflow status back to idle
         await getPrisma().workflow.update({

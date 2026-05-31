@@ -1,10 +1,6 @@
-/**
- * @fileoverview Workflow CRUD collection: lists and creates workflows for the signed-in user with default starter graph.
- */
-
-import { auth } from "@clerk/nextjs/server";
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { verifyApiRequest } from "@/lib/api-auth";
 import { createWorkflowSchema } from "@/lib/validation";
 
 const DEFAULT_NODES = [
@@ -37,21 +33,19 @@ const DEFAULT_NODES = [
 
 const DEFAULT_EDGES: unknown[] = [];
 
-/** Ensures Clerk user exists, then returns workflows with run counts (newest first). */
-export async function GET() {
-  const { userId } = await auth();
-  if (!userId) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+/**
+ * GET /api/v1/workflows
+ * Lists user workflows (metadata only).
+ */
+export async function GET(request: Request) {
+  const authResult = await verifyApiRequest(request);
+  if ("error" in authResult) {
+    return NextResponse.json({ error: authResult.error }, { status: authResult.status });
   }
 
-  try {
-    // Ensure user exists
-    await prisma.user.upsert({
-      where: { id: userId },
-      update: {},
-      create: { id: userId },
-    });
+  const { userId, rateLimitHeaders } = authResult;
 
+  try {
     const workflows = await prisma.workflow.findMany({
       where: { userId },
       orderBy: { updatedAt: "desc" },
@@ -62,29 +56,31 @@ export async function GET() {
         status: true,
         createdAt: true,
         updatedAt: true,
-        nodes: true,
-        webhookUrl: true,
-        webhookSecret: true,
         _count: { select: { runs: true } },
       },
     });
 
-    return NextResponse.json({ data: workflows });
+    return NextResponse.json({ data: workflows }, { headers: rateLimitHeaders });
   } catch (error) {
-    console.error("GET /api/workflows error:", error);
+    console.error("GET /api/v1/workflows error:", error);
     return NextResponse.json(
       { error: "Internal server error" },
-      { status: 500 }
+      { status: 500, headers: rateLimitHeaders }
     );
   }
 }
 
-/** Creates workflow with seeded Request-Inputs + Response nodes and empty edges. */
+/**
+ * POST /api/v1/workflows
+ * Creates a new workflow canvas.
+ */
 export async function POST(request: Request) {
-  const { userId } = await auth();
-  if (!userId) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const authResult = await verifyApiRequest(request);
+  if ("error" in authResult) {
+    return NextResponse.json({ error: authResult.error }, { status: authResult.status });
   }
+
+  const { userId, rateLimitHeaders } = authResult;
 
   try {
     const body = await request.json();
@@ -93,34 +89,27 @@ export async function POST(request: Request) {
     if (!parsed.success) {
       return NextResponse.json(
         { error: "Invalid input", issues: parsed.error.issues },
-        { status: 400 }
+        { status: 400, headers: rateLimitHeaders }
       );
     }
-
-    // Ensure user exists
-    await prisma.user.upsert({
-      where: { id: userId },
-      update: {},
-      create: { id: userId },
-    });
 
     const workflow = await prisma.workflow.create({
       data: {
         userId,
         name: parsed.data.name,
         description: parsed.data.description ?? null,
-        nodes: DEFAULT_NODES as unknown as Parameters<typeof prisma.workflow.create>[0]["data"]["nodes"],
-        edges: DEFAULT_EDGES as unknown as Parameters<typeof prisma.workflow.create>[0]["data"]["edges"],
+        nodes: DEFAULT_NODES as any,
+        edges: DEFAULT_EDGES as any,
         status: "idle",
       },
     });
 
-    return NextResponse.json({ data: workflow });
+    return NextResponse.json({ data: workflow }, { status: 201, headers: rateLimitHeaders });
   } catch (error) {
-    console.error("POST /api/workflows error:", error);
+    console.error("POST /api/v1/workflows error:", error);
     return NextResponse.json(
       { error: "Internal server error" },
-      { status: 500 }
+      { status: 500, headers: rateLimitHeaders }
     );
   }
 }

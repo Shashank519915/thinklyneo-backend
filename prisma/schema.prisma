@@ -14,21 +14,24 @@ model User {
   workflows Workflow[]
   balance   CreditBalance?
   ledgers   CreditLedger[]
+  keys      ApiKey[]
   createdAt DateTime       @default(now())
 }
 
 model Workflow {
-  id          String        @id @default(cuid())
-  userId      String
-  user        User          @relation(fields: [userId], references: [id])
-  name        String
-  description String?
-  nodes       Json
-  edges       Json
-  status      String        @default("idle") // idle | running | done | error
-  createdAt   DateTime      @default(now())
-  updatedAt   DateTime      @updatedAt
-  runs        WorkflowRun[]
+  id            String        @id @default(cuid())
+  userId        String
+  user          User          @relation(fields: [userId], references: [id])
+  name          String
+  description   String?
+  nodes         Json
+  edges         Json
+  status        String        @default("idle") // idle | running | done | error
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+  runs          WorkflowRun[]
+  webhookUrl    String?
+  webhookSecret String?
 }
 
 model WorkflowRun {
@@ -91,4 +94,14 @@ model CreditLedger {
   createdAt    DateTime     @default(now())
   user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
   run          WorkflowRun? @relation(fields: [runId], references: [id], onDelete: SetNull)
+}
+
+model ApiKey {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name      String
+  keyId     String   @unique
+  maskedKey String
+  createdAt DateTime @default(now())
 }

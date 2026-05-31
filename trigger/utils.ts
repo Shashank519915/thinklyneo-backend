@@ -1,6 +1,7 @@
 import { tasks } from "@trigger.dev/sdk/v3";
 import { prisma } from "../lib/prisma";
 import { Prisma } from "@prisma/client";
+import { triggerOutboundWebhook } from "../lib/webhooks";
 
 interface NotifyCoordinatorParams {
   workflowId: string;
@@ -64,6 +65,22 @@ export async function notifyCoordinator(params: NotifyCoordinatorParams) {
         creditCost: creditCost ?? null,
       },
     });
+
+    // Fire webhook notification for node completion
+    await triggerOutboundWebhook(
+      runId,
+      "node.completed",
+      status === "success",
+      {
+        nodeId,
+        status,
+        durationMs,
+        output,
+        creditCost,
+        providerUsed,
+      },
+      error ?? null
+    );
   } catch (dbErr) {
     console.error(`[notifyCoordinator] Failed to update NodeRun DB record for node ${nodeId}:`, dbErr);
   }
@@ -77,3 +94,4 @@ export async function notifyCoordinator(params: NotifyCoordinatorParams) {
     waitpointTokenId,
   });
 }
+

@@ -1,19 +1,13 @@
-/**
- * @fileoverview Single endpoint to start a workflow execution. Creates a WorkflowRun,
- * triggers the server-side orchestrator task, and returns credentials for SSE subscription.
- *
- * Replaces the old pattern where the client called /run, then /execute/crop-image and
- * /execute/gemini individually. Now a single POST kicks off everything server-side.
- */
-
-import { auth } from "@clerk/nextjs/server";
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { Prisma } from "@prisma/client";
+import { verifyApiRequest } from "@/lib/api-auth";
 import { z } from "zod";
 import { estimateWorkflowCost, getOrCreateBalance } from "@/lib/credits";
+import { triggerOutboundWebhook } from "@/lib/webhooks";
 
-const executeSchema = z.object({
+const runSchema = z.object({
+  workflowId: z.string().min(1),
   scope: z.enum(["full", "partial", "single"]).default("full"),
   inputValues: z.record(z.any()).optional(),
   nodeIds: z.array(z.string()).optional(),
@@ -23,53 +17,45 @@ const executeSchema = z.object({
 export const maxDuration = 60;
 
 /**
- * POST /api/workflows/[id]/execute
- *
- * 1. Validates auth + workflow ownership
- * 2. Prevents concurrent runs (409 if a running WorkflowRun exists)
- * 3. Creates WorkflowRun { status: "running" }
- * 4. Serializes the workflow graph (nodes + edges) from the DB
- * 5. Triggers workflow-orchestrator task
- * 6. Mints a publicAccessToken scoped to the orchestrator's run
- * 7. Returns { runId, orchestratorRunId, publicAccessToken }
+ * POST /api/v1/runs
+ * Executes a workflow canvas.
  */
-export async function POST(
-  request: Request,
-  { params }: { params: Promise<{ id: string }> }
-) {
-  const { userId } = await auth();
-  if (!userId) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+export async function POST(request: Request) {
+  const authResult = await verifyApiRequest(request);
+  if ("error" in authResult) {
+    return NextResponse.json({ error: authResult.error }, { status: authResult.status });
   }
 
-  const { id } = await params;
+  const { userId, rateLimitHeaders } = authResult;
 
   try {
     const body = await request.json();
-    const parsed = executeSchema.safeParse(body);
+    const parsed = runSchema.safeParse(body);
 
     if (!parsed.success) {
       return NextResponse.json(
         { error: "Invalid input", issues: parsed.error.issues },
-        { status: 400 }
+        { status: 400, headers: rateLimitHeaders }
       );
     }
 
+    const { workflowId, scope, inputValues = {}, nodeIds, existingOutputs = {} } = parsed.data;
+
     // Verify workflow exists and belongs to user
     const workflow = await prisma.workflow.findUnique({
-      where: { id, userId },
+      where: { id: workflowId, userId },
     });
 
     if (!workflow) {
       return NextResponse.json(
         { error: "Workflow not found" },
-        { status: 404 }
+        { status: 404, headers: rateLimitHeaders }
       );
     }
 
     // Prevent concurrent runs
     const existingRun = await prisma.workflowRun.findFirst({
-      where: { workflowId: id, status: "running" },
+      where: { workflowId, status: "running" },
     });
 
     if (existingRun) {
@@ -78,11 +64,9 @@ export async function POST(
           error: "A run is already in progress for this workflow",
           runId: existingRun.id,
         },
-        { status: 409 }
+        { status: 409, headers: rateLimitHeaders }
       );
     }
-
-    const { scope, inputValues = {}, nodeIds, existingOutputs = {} } = parsed.data;
 
     const allNodes = (workflow.nodes as any[]) ?? [];
     const targetNodes = scope === "full"
@@ -91,9 +75,8 @@ export async function POST(
 
     const estimatedCost = estimateWorkflowCost(targetNodes);
 
-    // Create run and place hold transactionally
+    // Create run and place credit hold transactionally
     const run = await prisma.$transaction(async (tx) => {
-      // Get or initialize user balance inside tx to secure grant
       const balance = await getOrCreateBalance(userId, tx);
       if (balance < estimatedCost) {
         throw new Error(
@@ -101,10 +84,10 @@ export async function POST(
         );
       }
 
-      // Create WorkflowRun
+      // Create WorkflowRun record
       const newRun = await tx.workflowRun.create({
         data: {
-          workflowId: id,
+          workflowId,
           userId,
           scope,
           status: "running",
@@ -113,7 +96,7 @@ export async function POST(
         },
       });
 
-      // Place hold if estimatedCost > 0
+      // Place hold transactionally
       if (estimatedCost > 0) {
         const nextBalance = balance - estimatedCost;
         await tx.creditBalance.update({
@@ -126,31 +109,30 @@ export async function POST(
             userId,
             amount: -estimatedCost,
             type: "hold",
-            description: `Hold for workflow execution run ${newRun.id}`,
+            description: `Hold for API workflow execution run ${newRun.id}`,
             runId: newRun.id,
             balanceAfter: nextBalance,
           },
         });
       }
 
-      // Mark workflow as running
+      // Set workflow status as running
       await tx.workflow.update({
-        where: { id },
+        where: { id: workflowId },
         data: { status: "running" },
       });
 
       return newRun;
     });
 
-    // Serialize the graph for the orchestrator
-    // nodes and edges are stored as JSON in the workflow record
+    // Serialize node graphs
     const nodes = (workflow.nodes as unknown[]) ?? [];
     const edges = (workflow.edges as unknown[]) ?? [];
 
-    // Trigger the orchestrator task
-    const { tasks, auth: triggerAuth } = await import("@trigger.dev/sdk/v3");
+    // Trigger orchestrator task on Trigger.dev
+    const { tasks } = await import("@trigger.dev/sdk/v3");
     const orchestratorRun = await tasks.trigger("workflow-orchestrator", {
-      workflowId: id,
+      workflowId,
       runId: run.id,
       nodes,
       edges,
@@ -160,48 +142,30 @@ export async function POST(
       existingOutputs,
     });
 
-    // Store orchestrator run ID in the WorkflowRun record
+    // Store orchestrator run ID in DB record
     await prisma.workflowRun.update({
       where: { id: run.id },
       data: { orchestratorRunId: orchestratorRun.id },
     });
 
     // Fire webhook notification for run start
-    const { triggerOutboundWebhook } = await import("@/lib/webhooks");
     await triggerOutboundWebhook(run.id, "run.started", true, {
       scope,
       inputValues,
     });
 
-    // Mint a public access token scoped to the orchestrator run
-    const publicAccessToken = await triggerAuth.createPublicToken({
-      scopes: {
-        read: {
-          runs: [orchestratorRun.id],
-        },
-      },
-      expirationTime: "2hr",
-    });
-
-    console.log(
-      `[Execute] Workflow ${id} run ${run.id} started. Orchestrator: ${orchestratorRun.id}`
-    );
-
     return NextResponse.json({
       data: {
         runId: run.id,
+        status: "running",
         orchestratorRunId: orchestratorRun.id,
-        publicAccessToken,
       },
-    });
-  } catch (error) {
-    console.error("POST /api/workflows/[id]/execute error:", error);
+    }, { status: 202, headers: rateLimitHeaders });
+  } catch (error: any) {
+    console.error("POST /api/v1/runs error:", error);
     return NextResponse.json(
-      {
-        error:
-          error instanceof Error ? error.message : "Internal server error",
-      },
-      { status: 500 }
+      { error: error.message || "Internal server error" },
+      { status: 500, headers: rateLimitHeaders }
     );
   }
 }
