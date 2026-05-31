@@ -33,18 +33,9 @@ export async function DELETE(
     // If Unkey is configured and this is NOT a mock key, delete it in Unkey
     if (isUnkeyConfigured && !keyRecord.keyId.startsWith("gx_mock_") && !keyRecord.maskedKey.startsWith("gx_mock_")) {
       try {
-        const deleteResp = await fetch("https://api.unkey.dev/v1/keys.deleteKey", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${rootKey}`,
-          },
-          body: JSON.stringify({ keyId: keyRecord.keyId }),
-        });
-
-        if (!deleteResp.ok) {
-          console.warn("[DELETE /api/keys/:id] Unkey deletion failed status:", deleteResp.status);
-        }
+        const { Unkey } = await import("@unkey/api");
+        const unkey = new Unkey({ rootKey });
+        await unkey.keys.deleteKey({ keyId: keyRecord.keyId });
       } catch (unkeyErr) {
         console.error("[DELETE /api/keys/:id] Failed to contact Unkey:", unkeyErr);
       }

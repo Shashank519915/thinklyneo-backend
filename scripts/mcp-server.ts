@@ -126,21 +126,26 @@ async function main() {
 
     const cleanToken = token.trim();
     const rootKey = process.env.UNKEY_ROOT_KEY;
-    const apiId = process.env.UNKEY_API_ID;
+    const apiId = process.env.UNKEY_API_ID || process.env.UNKEY_API_KEY;
     const isUnkeyConfigured = !!(rootKey && apiId);
 
     if (isUnkeyConfigured && !cleanToken.startsWith("gx_mock_")) {
       try {
-        const verifyResp = await fetch("https://api.unkey.dev/v1/keys.verifyKey", {
+        const verifyResp = await fetch("https://api.unkey.com/v2/keys.verifyKey", {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ key: cleanToken, apiId }),
+          headers: { 
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${rootKey}`,
+          },
+          body: JSON.stringify({ key: cleanToken }),
         });
 
         if (verifyResp.ok) {
           const result = await verifyResp.json();
-          if (result.valid && result.ownerId) {
-            return result.ownerId;
+          const data = result.data || {};
+          const userId = data.identity?.externalId || data.ownerId;
+          if (data.valid && userId) {
+            return userId;
           }
         }
       } catch (unkeyErr) {

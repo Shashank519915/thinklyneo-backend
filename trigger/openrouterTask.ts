@@ -42,7 +42,7 @@ async function callOpenRouterFree(payload: {
   }
 
   // Use the free Gemini-2.5-Flash model which supports multimodal (vision/image) inputs
-  const targetModel = "google/gemini-2.5-flash:free";
+  const targetModel = "google/gemini-2.5-flash";
 
   const messages: any[] = [];
 
