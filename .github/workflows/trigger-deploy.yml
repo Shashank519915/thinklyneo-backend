@@ -32,6 +32,6 @@ jobs:
         run: pnpm exec prisma generate
 
       - name: Deploy Trigger.dev tasks
-        run: npx trigger.dev@latest deploy --native-build-server
+        run: npx trigger.dev@latest deploy
         env:
           TRIGGER_ACCESS_TOKEN: ${{ secrets.TRIGGER_ACCESS_TOKEN }}
