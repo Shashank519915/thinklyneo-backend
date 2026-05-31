@@ -535,6 +535,23 @@ async function triggerReadyNodes(params: TriggerReadyNodesParams) {
           waitpointTokenId,
           workflowId,
         });
+      } else if (node.type === "openRouter") {
+        const images = (resolvedInputs["images"] as unknown[]) ?? [];
+        const validImages = images.filter((img): img is string => typeof img === "string" && img.length > 0);
+        
+        await tasks.trigger("openrouter-inference", {
+          prompt: resolvedInputs["prompt"] ?? null,
+          systemPrompt: (resolvedInputs["systemPrompt"] as string) ?? (node.data as any).inputs?.systemPrompt ?? undefined,
+          images: validImages,
+          temperature: (node.data as any).inputs?.temperature ?? 1.0,
+          maxTokens: (node.data as any).inputs?.maxTokens ?? 2048,
+          topP: (node.data as any).inputs?.topP ?? 0.95,
+          runId,
+          nodeRunId: node.id,
+          orchestratorRunId,
+          waitpointTokenId,
+          workflowId,
+        });
       } else if (node.type === "gptImage2") {
         await tasks.trigger("gpt-image-2", {
           prompt: (resolvedInputs["prompt"] as string) ?? "",

@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { NodeDefinition } from "../types/node.types";
 
-export const openrouterLlmInputSchema = z.object({
+export const geminiInputSchema = z.object({
   prompt: z.string({ required_error: "Prompt is required" }).min(1, "Prompt is required"),
   systemPrompt: z.string().nullable().optional(),
   images: z.array(z.string()).optional(),
@@ -13,16 +13,16 @@ export const openrouterLlmInputSchema = z.object({
   topP: z.number().min(0).max(1).optional(),
 });
 
-export const openrouterLlmOutputSchema = z.object({
+export const geminiOutputSchema = z.object({
   response: z.string(),
 });
 
-export const openrouterLlmDefinition: NodeDefinition = {
-  type: "openRouter",
-  name: "OpenRouter LLM",
+export const geminiDefinition: NodeDefinition = {
+  type: "gemini",
+  name: "Gemini",
   category: "text",
   icon: "Sparkles",
-  color: "blue",
+  color: "purple",
   credits: {
     base: 450000, // 0.45M microcredits
   },
@@ -35,7 +35,7 @@ export const openrouterLlmDefinition: NodeDefinition = {
       group: "primary",
       handle: {
         type: "text",
-        color: "#3B82F6",
+        color: "#8B5CF6",
       },
     },
     {
@@ -46,7 +46,7 @@ export const openrouterLlmDefinition: NodeDefinition = {
       defaultValue: "",
       handle: {
         type: "text",
-        color: "#3B82F6",
+        color: "#8B5CF6",
       },
     },
     {
@@ -66,7 +66,7 @@ export const openrouterLlmDefinition: NodeDefinition = {
       group: "primary",
       handle: {
         type: "video",
-        color: "#3B82F6",
+        color: "#8B5CF6",
       },
     },
     {
@@ -126,10 +126,10 @@ export const openrouterLlmDefinition: NodeDefinition = {
       type: "text",
       handle: {
         type: "text",
-        color: "#3B82F6",
+        color: "#8B5CF6",
       },
     },
   ],
-  inputSchema: openrouterLlmInputSchema,
-  outputSchema: openrouterLlmOutputSchema,
+  inputSchema: geminiInputSchema,
+  outputSchema: geminiOutputSchema,
 };

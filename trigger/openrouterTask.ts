@@ -1,13 +1,13 @@
 /**
- * @fileoverview Trigger.dev `gemini-inference`: Paired to OpenRouter completions with prioritized provider fallback.
+ * @fileoverview Trigger.dev `openrouter-inference`: Runs text completions on OpenRouter's free Llama 3.3 model.
  */
 
 import { task, wait } from "@trigger.dev/sdk/v3";
 import { notifyCoordinator } from "./utils";
 import { openrouterLlmDefinition } from "@galaxy/shared";
 
-interface GeminiPayload {
-  model: string;
+interface OpenRouterPayload {
+  model?: string;
   prompt: string;
   systemPrompt?: string;
   images?: string[];
@@ -28,8 +28,7 @@ interface ProviderAttempt {
   durationMs: number;
 }
 
-async function callOpenRouter(payload: {
-  model: string;
+async function callOpenRouterFree(payload: {
   prompt: string;
   systemPrompt?: string | null;
   images?: string[];
@@ -42,13 +41,8 @@ async function callOpenRouter(payload: {
     throw new Error("OPENROUTER_API_KEY environment variable is not configured on backend");
   }
 
-  // Map "gemini-2.5-flash" to "google/gemini-2.5-flash" for OpenRouter
-  // If model is unset or empty, use the free Llama-3.3-70b model on OpenRouter
-  const targetModel = payload.model === "gemini-2.5-flash"
-    ? "google/gemini-2.5-flash"
-    : payload.model
-      ? payload.model
-      : "meta-llama/llama-3.3-70b-instruct:free";
+  // Strictly use the free Llama-3.3-70b model
+  const targetModel = "meta-llama/llama-3.3-70b-instruct:free";
 
   const messages: any[] = [];
 
@@ -79,7 +73,7 @@ async function callOpenRouter(payload: {
     content: userContent,
   });
 
-  console.log(`[OpenRouter Task] Invoking model: ${targetModel}`);
+  console.log(`[OpenRouter Task] Invoking free model: ${targetModel}`);
   const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
     method: "POST",
     headers: {
@@ -112,11 +106,10 @@ async function callOpenRouter(payload: {
   return choice.message.content;
 }
 
-export const geminiTask = task({
-  id: "gemini-inference",
-  run: async (payload: GeminiPayload) => {
+export const openrouterTask = task({
+  id: "openrouter-inference",
+  run: async (payload: OpenRouterPayload) => {
     const {
-      model,
       prompt,
       systemPrompt,
       images = [],
@@ -131,7 +124,7 @@ export const geminiTask = task({
     } = payload;
     const startMs = Date.now();
 
-    console.log(`[GeminiTask] 🚀 Starting gemini-inference task (nodeRunId: ${nodeRunId})`);
+    console.log(`[OpenRouterTask] 🚀 Starting openrouter-inference task (nodeRunId: ${nodeRunId})`);
 
     const attempts: ProviderAttempt[] = [];
     let successfulProvider: string | null = null;
@@ -141,14 +134,13 @@ export const geminiTask = task({
     // ── Provider 1: main-openrouter (Real execution) ────────────────────────
     const pStartMain = Date.now();
     try {
-      logs += `[main-openrouter] Attempting OpenRouter completion...\n`;
+      logs += `[main-openrouter] Attempting OpenRouter free model completion...\n`;
       
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 15000); // 15-second timeout for primary API call
+      const timeoutId = setTimeout(() => controller.abort(), 15000); // 15-second timeout
 
       try {
-        responseText = await callOpenRouter({
-          model,
+        responseText = await callOpenRouterFree({
           prompt,
           systemPrompt,
           images,
@@ -166,11 +158,11 @@ export const geminiTask = task({
         status: "success",
         durationMs: Date.now() - pStartMain,
       });
-      logs += `[main-openrouter] Success: Completion completed successfully.\n`;
+      logs += `[main-openrouter] Success: Free model completion completed successfully.\n`;
     } catch (err: any) {
       const pDurMain = Date.now() - pStartMain;
       const errorMsg = err.name === "AbortError" ? "Request timed out after 15 seconds" : err.message;
-      console.warn(`[GeminiTask] ⚠️ Provider main-openrouter failed in ${pDurMain}ms:`, errorMsg);
+      console.warn(`[OpenRouterTask] ⚠️ Provider main-openrouter failed in ${pDurMain}ms:`, errorMsg);
       logs += `[main-openrouter] Failure after ${pDurMain}ms: ${errorMsg}\n`;
       attempts.push({
         providerId: "main-openrouter",
@@ -186,7 +178,7 @@ export const geminiTask = task({
         await wait.for({ seconds: 2 }); // Short simulated delay
 
         // Return a canned placeholder text response
-        responseText = `[Backup Provider Stub Response]\nThis is a fallback response because the primary OpenRouter provider failed or timed out.\n\nPrompt: "${prompt}"`;
+        responseText = `[Backup Provider Stub Response]\nThis is a fallback response because the primary OpenRouter free model failed or timed out.\n\nPrompt: "${prompt}"`;
         successfulProvider = "backup-stub";
         attempts.push({
           providerId: "backup-stub",
@@ -236,7 +228,7 @@ export const geminiTask = task({
         runId,
         nodeId: nodeRunId,
         status: "success",
-        output: { response: responseText }, // Needs to match openrouterLlmOutputSchema (which expects { response: string })
+        output: { response: responseText }, // Matches openrouterLlmOutputSchema (expects { response: string })
         durationMs,
         orchestratorRunId,
         waitpointTokenId,

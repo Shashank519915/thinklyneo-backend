@@ -1,5 +1,5 @@
 /**
- * @fileoverview Gemini (OpenRouter LLM) inference API: triggers task on Trigger.dev with REST polling,
+ * @fileoverview OpenRouter LLM inference API: triggers task on Trigger.dev with REST polling,
  * falling back to in-process OpenRouter API call when fallback is enabled.
  */
 
@@ -8,14 +8,9 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 
-/**
- * `true`: if Trigger.dev does not return a result, call OpenRouter in-process (extra resilience).
- * `false` (default): strict Trigger-only — return 503 when Trigger fails or is unset.
- */
-const OPENROUTER_DIRECT_FALLBACK_ENABLED = true; // Enabled for better resiliency in direct executions
+const OPENROUTER_DIRECT_FALLBACK_ENABLED = true;
 
-const geminiSchema = z.object({
-  model: z.string().default("gemini-2.5-flash"),
+const openrouterSchema = z.object({
   prompt: z.string().min(1),
   systemPrompt: z.string().nullable().optional(),
   images: z.array(z.string()).optional(),
@@ -28,8 +23,7 @@ const geminiSchema = z.object({
 
 export const maxDuration = 60;
 
-async function runOpenRouterDirect(payload: {
-  model: string;
+async function runOpenRouterDirectFree(payload: {
   prompt: string;
   systemPrompt?: string | null;
   images?: string[];
@@ -42,11 +36,7 @@ async function runOpenRouterDirect(payload: {
     throw new Error("OPENROUTER_API_KEY environment variable is not configured on backend");
   }
 
-  const model = payload.model === "gemini-2.5-flash"
-    ? "google/gemini-2.5-flash"
-    : payload.model
-      ? payload.model
-      : "meta-llama/llama-3.3-70b-instruct:free";
+  const model = "meta-llama/llama-3.3-70b-instruct:free";
 
   const messages: any[] = [];
 
@@ -117,7 +107,7 @@ export async function POST(request: Request) {
 
   try {
     const body = await request.json();
-    const parsed = geminiSchema.safeParse(body);
+    const parsed = openrouterSchema.safeParse(body);
 
     if (!parsed.success) {
       return NextResponse.json(
@@ -126,7 +116,7 @@ export async function POST(request: Request) {
       );
     }
 
-    const { model, prompt, systemPrompt, images, temperature, maxTokens, topP, runId, nodeRunId } = parsed.data;
+    const { prompt, systemPrompt, images, temperature, maxTokens, topP, runId, nodeRunId } = parsed.data;
 
     // Try Trigger.dev first; fall back to direct call if unavailable
     const triggerKey = process.env.TRIGGER_SECRET_KEY;
@@ -145,7 +135,7 @@ export async function POST(request: Request) {
           });
 
           if (existingNodeRun && existingNodeRun.triggerRunId) {
-            console.log(`[Gemini/OpenRouter] NodeRun already exists with triggerRunId: ${existingNodeRun.triggerRunId}. Re-generating token.`);
+            console.log(`[OpenRouter] NodeRun already exists with triggerRunId: ${existingNodeRun.triggerRunId}. Re-generating token.`);
             const { auth: triggerAuth } = await import("@trigger.dev/sdk/v3");
             const publicAccessToken = await triggerAuth.createPublicToken({
               scopes: {
@@ -163,12 +153,11 @@ export async function POST(request: Request) {
             });
           }
 
-          console.log("[Gemini/OpenRouter] 🚀 Triggering task (gemini-inference) in REALTIME mode...");
+          console.log("[OpenRouter] 🚀 Triggering task (openrouter-inference) in REALTIME mode...");
           const { tasks, auth: triggerAuth } = await import("@trigger.dev/sdk/v3");
-          const { geminiTask } = await import("@/trigger/geminiTask");
-          const run = await tasks.trigger<typeof geminiTask>(
-            "gemini-inference",
-            { model, prompt, systemPrompt: systemPrompt ?? undefined, images: images ?? [], temperature: temperature ?? 1.0, maxTokens: maxTokens ?? 2048, topP: topP ?? 0.95, runId, nodeRunId }
+          const run = await tasks.trigger(
+            "openrouter-inference",
+            { prompt, systemPrompt: systemPrompt ?? undefined, images: images ?? [], temperature: temperature ?? 1.0, maxTokens: maxTokens ?? 2048, topP: topP ?? 0.95, runId, nodeRunId }
           );
           const publicAccessToken = await triggerAuth.createPublicToken({
             scopes: {
@@ -186,40 +175,39 @@ export async function POST(request: Request) {
           });
         }
 
-        console.log("[Gemini/OpenRouter] 🚀 Attempting Trigger.dev task (gemini-inference) in polling mode...");
+        console.log("[OpenRouter] 🚀 Attempting Trigger.dev task (openrouter-inference) in polling mode...");
         const { tasks } = await import("@trigger.dev/sdk/v3");
-        const { geminiTask } = await import("@/trigger/geminiTask");
-        const run = await tasks.trigger<typeof geminiTask>(
-          "gemini-inference",
-          { model, prompt, systemPrompt: systemPrompt ?? undefined, images: images ?? [], temperature: temperature ?? 1.0, maxTokens: maxTokens ?? 2048, topP: topP ?? 0.95, runId, nodeRunId }
+        const run = await tasks.trigger(
+          "openrouter-inference",
+          { prompt, systemPrompt: systemPrompt ?? undefined, images: images ?? [], temperature: temperature ?? 1.0, maxTokens: maxTokens ?? 2048, topP: topP ?? 0.95, runId, nodeRunId }
         );
         // Poll until complete
         const apiUrl = `https://api.trigger.dev/api/v3/runs/${run.id}`;
         const headers = { Authorization: `Bearer ${triggerKey}` };
-        const deadline = Date.now() + 50000; // 50s — safe under Vercel Hobby's 60s max
+        const deadline = Date.now() + 50000;
         let llmOutput: string | null = null;
         while (Date.now() < deadline) {
           await new Promise((r) => setTimeout(r, 2000));
           const resp = await fetch(apiUrl, { headers });
           if (!resp.ok) continue;
           const data = await resp.json() as { status: string; output?: { response?: string }; error?: { message?: string } };
-          console.log(`[Gemini/OpenRouter] Run ${run.id} status: ${data.status}`);
+          console.log(`[OpenRouter] Run ${run.id} status: ${data.status}`);
           if (data.status === "COMPLETED") { llmOutput = data.output?.response ?? null; break; }
           if (data.status === "FAILED" || data.status === "CRASHED" || data.status === "CANCELED") {
-            console.warn("[Gemini/OpenRouter] ⚠️ Task failed:", data.error?.message); break;
+            console.warn("[OpenRouter] ⚠️ Task failed:", data.error?.message); break;
           }
         }
         if (llmOutput !== null) {
-          console.log("[Gemini/OpenRouter] ✅ Trigger.dev task succeeded");
+          console.log("[OpenRouter] ✅ Trigger.dev task succeeded");
           return NextResponse.json({ data: { response: llmOutput } });
         }
-        console.warn("[Gemini/OpenRouter] ⚠️ Task did not complete in time, falling back to direct");
+        console.warn("[OpenRouter] ⚠️ Task did not complete in time, falling back to direct");
       } catch (triggerErr) {
-        console.warn("[Gemini/OpenRouter] ⚠️ Trigger.dev unavailable, falling back to direct call:", triggerErr);
+        console.warn("[OpenRouter] ⚠️ Trigger.dev unavailable, falling back to direct call:", triggerErr);
       }
     } else {
       console.warn(
-        `[Gemini/OpenRouter] No TRIGGER_SECRET_KEY — ${OPENROUTER_DIRECT_FALLBACK_ENABLED ? "will attempt direct OpenRouter call" : "direct API fallback disabled (503)"}`
+        `[OpenRouter] No TRIGGER_SECRET_KEY — ${OPENROUTER_DIRECT_FALLBACK_ENABLED ? "will attempt direct OpenRouter call" : "direct API fallback disabled (503)"}`
       );
     }
 
@@ -234,13 +222,13 @@ export async function POST(request: Request) {
     }
 
     // Direct OpenRouter call (fallback or when Trigger.dev is not configured)
-    console.log("[Gemini/OpenRouter] 🔧 Using DIRECT fallback — calling OpenRouter API directly");
-    const response = await runOpenRouterDirect({ model, prompt, systemPrompt, images, temperature, maxTokens, topP });
-    console.log("[Gemini/OpenRouter] ✅ Direct OpenRouter call succeeded");
+    console.log("[OpenRouter] 🔧 Using DIRECT fallback — calling OpenRouter API directly");
+    const response = await runOpenRouterDirectFree({ prompt, systemPrompt, images, temperature, maxTokens, topP });
+    console.log("[OpenRouter] ✅ Direct OpenRouter call succeeded");
     return NextResponse.json({ data: { response } });
 
   } catch (error) {
-    console.error("POST /api/execute/gemini error:", error);
+    console.error("POST /api/execute/openrouter error:", error);
     const message = error instanceof Error ? error.message : "OpenRouter execution failed";
     return NextResponse.json({ error: message }, { status: 500 });
   }

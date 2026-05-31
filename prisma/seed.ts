@@ -66,11 +66,10 @@ const sampleNodes = [
   },
   {
     id: "gemini-1",
-    type: "gemini",
+    type: "openRouter",
     position: { x: 480, y: 600 },
     data: {
-      label: "Gemini #1",
-      model: "gemini-2.5-flash",
+      label: "OpenRouter LLM #1",
       inputs: {
         prompt: null,
         systemPrompt:
@@ -85,11 +84,10 @@ const sampleNodes = [
   },
   {
     id: "gemini-2",
-    type: "gemini",
+    type: "openRouter",
     position: { x: 860, y: 380 },
     data: {
-      label: "Gemini #2",
-      model: "gemini-2.5-flash",
+      label: "OpenRouter LLM #2",
       inputs: {
         prompt: null,
         systemPrompt:
@@ -104,11 +102,10 @@ const sampleNodes = [
   },
   {
     id: "gemini-final",
-    type: "gemini",
+    type: "openRouter",
     position: { x: 1200, y: 220 },
     data: {
-      label: "Final Gemini",
-      model: "gemini-2.5-flash",
+      label: "Final OpenRouter LLM",
       inputs: {
         prompt: null,
         systemPrompt:
