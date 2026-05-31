@@ -32,7 +32,7 @@ export interface ExecutionContext {
   onNodeError: (nodeId: string, error: string) => void;
   onComplete: (results: NodeRunResult[]) => void;
   executeTriggerNode?: (args: {
-    task: "crop-image" | "gemini-inference";
+    task: "crop-image" | "gemini-inference" | "openrouter-inference";
     body: Record<string, unknown>;
   }) => Promise<{ output: unknown; error?: string }>;
 }
@@ -139,6 +139,7 @@ function getHandleDataType(
   // Node type based fallback
   if (nodeType === "cropImage") return "image";
   if (nodeType === "gemini") return "text";
+  if (nodeType === "openRouter") return "text";
 
   return "generic";
 }
@@ -318,6 +319,46 @@ async function executeNode(
     if (!resp.ok) {
       const err = await resp.json().catch(() => ({ error: "Execution failed" }));
       return { output: null, error: err.error ?? "Gemini execution failed" };
+    }
+    const result = await resp.json();
+    return { output: result.data?.response ?? null };
+  }
+
+  if (type === "openRouter") {
+    const data = node.data as {
+      inputs?: {
+        systemPrompt?: string | null;
+        temperature?: number;
+        maxTokens?: number;
+        topP?: number;
+      };
+    };
+    const prompt = resolvedInputs["prompt"] ?? null;
+    if (!prompt || typeof prompt !== "string" || !prompt.trim()) {
+      return { output: null, error: "No prompt connected or prompt is empty" };
+    }
+    const images = (resolvedInputs["images"] as unknown[]) ?? [];
+    const validImages = images.filter((img): img is string => typeof img === "string" && img.length > 0);
+    const body = {
+      prompt,
+      systemPrompt: resolvedInputs["systemPrompt"] ?? data.inputs?.systemPrompt ?? null,
+      images: validImages,
+      temperature: data.inputs?.temperature ?? 1.0,
+      maxTokens: data.inputs?.maxTokens ?? 2048,
+      runId,
+      nodeRunId: node.id,
+    };
+    if (ctx?.executeTriggerNode) {
+      return ctx.executeTriggerNode({ task: "openrouter-inference", body });
+    }
+    const resp = await fetch("/api/execute/openrouter", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    if (!resp.ok) {
+      const err = await resp.json().catch(() => ({ error: "Execution failed" }));
+      return { output: null, error: err.error ?? "OpenRouter execution failed" };
     }
     const result = await resp.json();
     return { output: result.data?.response ?? null };
