@@ -30,5 +30,10 @@ export default defineConfig({
       }),
     ],
     external: ["fluent-ffmpeg"],
+    // Resolve local workspace package to its TS source so esbuild bundles it inline.
+    // Without this, Trigger.dev's cloud Docker build can't follow the pnpm file: symlink.
+    alias: {
+      "@galaxy/shared": "./shared/src/index.ts",
+    },
   },
 });
