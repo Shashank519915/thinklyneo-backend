@@ -31,6 +31,9 @@ jobs:
       - name: Generate Prisma Client
         run: pnpm exec prisma generate
 
+      - name: Build shared package
+        run: pnpm --filter @galaxy/shared build
+
       - name: Deploy Trigger.dev tasks
         run: npx trigger.dev@latest deploy
         env:
