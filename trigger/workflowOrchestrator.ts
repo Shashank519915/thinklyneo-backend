@@ -176,7 +176,10 @@ function resolveInputsForNode(
       sourceHandle
     ) {
       const obj = sourceOutput as Record<string, unknown>;
-      if (sourceHandle in obj) {
+      const key = sourceHandle.startsWith("out:") ? sourceHandle.slice(4) : sourceHandle;
+      if (key in obj) {
+        valueToPass = obj[key];
+      } else if (sourceHandle in obj) {
         valueToPass = obj[sourceHandle];
       }
     }
@@ -212,7 +215,7 @@ async function executeNodeServerInline(
     const fields = (node.data["fields"] as Array<{ id: string; value: unknown }>) ?? [];
     const outputs: Record<string, unknown> = {};
     for (const f of fields) {
-      outputs[f.id] = f.value;
+      outputs[f.id] = (resolvedInputs && resolvedInputs[f.id] !== undefined) ? resolvedInputs[f.id] : f.value;
     }
     return { output: outputs };
   }
