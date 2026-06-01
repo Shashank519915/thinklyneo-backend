@@ -253,7 +253,11 @@ async function executeNode(
   }
 
   if (type === "cropImage") {
-    const imageUrl = resolvedInputs["inputImage"] ?? null;
+    let imageUrl = resolvedInputs["inputImage"] ?? null;
+    if (typeof imageUrl === "string" && imageUrl.length > 0) {
+      const split = imageUrl.split(",").map((s) => s.trim()).filter(Boolean);
+      imageUrl = split[0] || null;
+    }
     if (!imageUrl || typeof imageUrl !== "string") {
       return { output: null, error: "No image connected to Input Image handle" };
     }
@@ -297,7 +301,13 @@ async function executeNode(
       return { output: null, error: "No prompt connected or prompt is empty" };
     }
     const images = (resolvedInputs["images"] as unknown[]) ?? [];
-    const validImages = images.filter((img): img is string => typeof img === "string" && img.length > 0);
+    const validImages: string[] = [];
+    for (const img of images) {
+      if (typeof img === "string" && img.length > 0) {
+        const splitUrls = img.split(",").map((s) => s.trim()).filter(Boolean);
+        validImages.push(...splitUrls);
+      }
+    }
     const body = {
       model: data.model ?? "gemini-2.5-flash",
       prompt,
@@ -338,7 +348,13 @@ async function executeNode(
       return { output: null, error: "No prompt connected or prompt is empty" };
     }
     const images = (resolvedInputs["images"] as unknown[]) ?? [];
-    const validImages = images.filter((img): img is string => typeof img === "string" && img.length > 0);
+    const validImages: string[] = [];
+    for (const img of images) {
+      if (typeof img === "string" && img.length > 0) {
+        const splitUrls = img.split(",").map((s) => s.trim()).filter(Boolean);
+        validImages.push(...splitUrls);
+      }
+    }
     const body = {
       prompt,
       systemPrompt: resolvedInputs["systemPrompt"] ?? data.inputs?.systemPrompt ?? null,

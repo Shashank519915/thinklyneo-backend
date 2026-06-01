@@ -505,8 +505,14 @@ async function triggerReadyNodes(params: TriggerReadyNodesParams) {
       logger.info(`[Orchestrator] Triggering background task for node ${node.id} (${node.type})`);
 
       if (node.type === "cropImage") {
+        let imageUrl = (resolvedInputs["inputImage"] as string) || "";
+        if (imageUrl) {
+          const split = imageUrl.split(",").map((s) => s.trim()).filter(Boolean);
+          imageUrl = split[0] || "";
+        }
+
         await tasks.trigger("crop-image", {
-          imageUrl: resolvedInputs["inputImage"] ?? null,
+          imageUrl,
           x: (resolvedInputs["x"] as number) ?? 0,
           y: (resolvedInputs["y"] as number) ?? 0,
           w: (resolvedInputs["w"] as number) ?? 100,
@@ -519,7 +525,13 @@ async function triggerReadyNodes(params: TriggerReadyNodesParams) {
         });
       } else if (node.type === "gemini") {
         const images = (resolvedInputs["images"] as unknown[]) ?? [];
-        const validImages = images.filter((img): img is string => typeof img === "string" && img.length > 0);
+        const validImages: string[] = [];
+        for (const img of images) {
+          if (typeof img === "string" && img.length > 0) {
+            const splitUrls = img.split(",").map((s) => s.trim()).filter(Boolean);
+            validImages.push(...splitUrls);
+          }
+        }
         
         await tasks.trigger("gemini-inference", {
           model: (node.data as any).model ?? "gemini-2.5-flash",
@@ -537,7 +549,13 @@ async function triggerReadyNodes(params: TriggerReadyNodesParams) {
         });
       } else if (node.type === "openRouter") {
         const images = (resolvedInputs["images"] as unknown[]) ?? [];
-        const validImages = images.filter((img): img is string => typeof img === "string" && img.length > 0);
+        const validImages: string[] = [];
+        for (const img of images) {
+          if (typeof img === "string" && img.length > 0) {
+            const splitUrls = img.split(",").map((s) => s.trim()).filter(Boolean);
+            validImages.push(...splitUrls);
+          }
+        }
         
         await tasks.trigger("openrouter-inference", {
           prompt: resolvedInputs["prompt"] ?? null,
@@ -564,9 +582,15 @@ async function triggerReadyNodes(params: TriggerReadyNodesParams) {
           workflowId,
         });
       } else if (node.type === "klingV3") {
+        let inputImage = (resolvedInputs["inputImage"] as string) || "";
+        if (inputImage) {
+          const split = inputImage.split(",").map((s) => s.trim()).filter(Boolean);
+          inputImage = split[0] || "";
+        }
+
         await tasks.trigger("kling-v3", {
           prompt: (resolvedInputs["prompt"] as string) ?? "",
-          inputImage: (resolvedInputs["inputImage"] as string) ?? null,
+          inputImage,
           aspectRatio: (resolvedInputs["aspectRatio"] as any) ?? "16:9",
           duration: (resolvedInputs["duration"] as any) ?? "5s",
           runId,
