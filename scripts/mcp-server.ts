@@ -10,25 +10,6 @@ const __dirname = path.dirname(__filename);
 dotenv.config({ path: path.resolve(__dirname, "../.env.local") });
 dotenv.config();
 
-// 1 credit = 1,000,000 microcredits
-const BASE_ESTIMATES: Record<string, number> = {
-  cropImage: 0,
-  gemini: 1000000, // 1.0M
-  gptImage2: 1000000, // 1.0M
-  klingV3: 2000000, // 2.0M
-  mergeVideo: 0,
-  mergeAV: 0,
-  extractAudio: 0,
-};
-
-function estimateWorkflowCost(nodes: any[]): number {
-  let total = 0;
-  for (const node of nodes) {
-    total += BASE_ESTIMATES[node.type] || 0;
-  }
-  return total;
-}
-
 // Default system nodes for new workflow creation
 const DEFAULT_NODES = [
   {
@@ -72,45 +53,9 @@ async function main() {
     McpError,
   } = await import("@modelcontextprotocol/sdk/types.js");
   
-  async function getOrCreateBalance(userId: string): Promise<number> {
-    const existing = await prisma.creditBalance.findUnique({
-      where: { userId },
-    });
-
-    if (existing) {
-      return existing.balance;
-    }
-
-    // Create default initial grant transactionally
-    const INITIAL_GRANT_MICROCREDITS = 100000000; // 100.00 credits
-    const result = await prisma.$transaction(async (tx) => {
-      const innerExisting = await tx.creditBalance.findUnique({
-        where: { userId },
-      });
-      if (innerExisting) return innerExisting;
-
-      const newBalance = await tx.creditBalance.create({
-        data: {
-          userId,
-          balance: INITIAL_GRANT_MICROCREDITS,
-        },
-      });
-
-      await tx.creditLedger.create({
-        data: {
-          userId,
-          amount: INITIAL_GRANT_MICROCREDITS,
-          type: "initial_grant",
-          description: "Initial signup credits grant",
-          balanceAfter: INITIAL_GRANT_MICROCREDITS,
-        },
-      });
-
-      return newBalance;
-    });
-
-    return result.balance;
-  }
+  const { getOrCreateBalance, estimateWorkflowCost, placeCreditHold } = await import(
+    "../lib/credits.js"
+  );
 
   /**
    * Validates the API key from environment variables.
@@ -369,51 +314,32 @@ async function main() {
           const allNodes = (workflow.nodes as any[]) ?? [];
           const estimatedCost = estimateWorkflowCost(allNodes);
 
-          // Run transaction to check credits hold
-          const run = await prisma.$transaction(async (tx) => {
-            const balance = await getOrCreateBalance(userId);
-            if (balance < estimatedCost) {
-              throw new Error(
-                `Insufficient credits. Estimated cost: ${(estimatedCost / 1000000).toFixed(2)}M, but balance is ${(balance / 1000000).toFixed(2)}M.`
-              );
-            }
+          const balance = await getOrCreateBalance(userId);
+          if (balance < estimatedCost) {
+            throw new McpError(
+              ErrorCode.InvalidParams,
+              `Insufficient credits. Estimated cost: ${(estimatedCost / 1_000_000).toFixed(2)}M, balance: ${(balance / 1_000_000).toFixed(2)}M.`
+            );
+          }
 
-            const newRun = await tx.workflowRun.create({
-              data: {
-                workflowId,
-                userId,
-                scope: "full",
-                status: "running",
-                startedAt: new Date(),
-                inputValues: (inputValues ?? Prisma.JsonNull) as Prisma.InputJsonValue,
-              },
-            });
+          const run = await prisma.workflowRun.create({
+            data: {
+              workflowId,
+              userId,
+              scope: "full",
+              status: "running",
+              startedAt: new Date(),
+              inputValues: (inputValues ?? Prisma.JsonNull) as Prisma.InputJsonValue,
+            },
+          });
 
-            if (estimatedCost > 0) {
-              const nextBalance = balance - estimatedCost;
-              await tx.creditBalance.update({
-                where: { userId },
-                data: { balance: nextBalance },
-              });
+          if (estimatedCost > 0) {
+            await placeCreditHold(userId, estimatedCost, run.id);
+          }
 
-              await tx.creditLedger.create({
-                data: {
-                  userId,
-                  amount: -estimatedCost,
-                  type: "hold",
-                  description: `Hold for MCP workflow run ${newRun.id}`,
-                  runId: newRun.id,
-                  balanceAfter: nextBalance,
-                },
-              });
-            }
-
-            await tx.workflow.update({
-              where: { id: workflowId },
-              data: { status: "running" },
-            });
-
-            return newRun;
+          await prisma.workflow.update({
+            where: { id: workflowId },
+            data: { status: "running" },
           });
 
           // Trigger orchestrator task on Trigger.dev

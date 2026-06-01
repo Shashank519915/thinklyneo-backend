@@ -42,7 +42,7 @@ export interface ExecutionContext {
  *
  * @param newEdge — When provided, probes whether adding this edge introduces a cycle.
  */
-function hasCycle(
+export function hasCycle(
   nodes: Node[],
   edges: Edge[],
   newEdge?: { source: string; target: string }
