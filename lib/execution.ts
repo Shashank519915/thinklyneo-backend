@@ -119,6 +119,8 @@ function getHandleDataType(
     if (handleId.includes("image")) return "image";
     if (handleId.includes("video")) return "video";
     if (handleId.includes("audio")) return "audio";
+    if (handleId.includes("media")) return "media";
+    if (handleId.includes("file")) return "file";
     if (handleId.includes("number")) return "number";
     if (handleId.includes("boolean")) return "boolean";
     if (handleId.includes("text")) return "text";
@@ -137,6 +139,8 @@ function getHandleDataType(
   if (handleId === "in:images") return "image"; // gemini vision multi-input
   if (handleId.includes("Video") || handleId.includes("video")) return "video";
   if (handleId.includes("Audio") || handleId.includes("audio")) return "audio";
+  if (handleId.includes("media") || handleId.includes("Media")) return "media";
+  if (handleId.includes("file") || handleId.includes("File") || handleId === "in:file") return "file";
   if (handleId.includes("prompt") || handleId === "in:prompt" || handleId === "in:systemPrompt") return "text";
   if (handleId === "out:response") return "text";
   if (handleId.includes("x") || handleId.includes("y") || handleId.includes(":w") || handleId.includes(":h")) return "number";
