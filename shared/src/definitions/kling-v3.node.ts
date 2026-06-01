@@ -30,7 +30,7 @@ export const klingV3Definition: NodeDefinition = {
       group: "primary",
       handle: {
         type: "text",
-        color: "#3B82F6",
+        color: "#f59e0b",
       },
     },
     {
@@ -40,7 +40,7 @@ export const klingV3Definition: NodeDefinition = {
       group: "primary",
       handle: {
         type: "image",
-        color: "#F97316",
+        color: "#3b82f6",
       },
     },
     {
@@ -74,7 +74,7 @@ export const klingV3Definition: NodeDefinition = {
       type: "video",
       handle: {
         type: "video",
-        color: "#3B82F6",
+        color: "#22c55e",
       },
     },
   ],

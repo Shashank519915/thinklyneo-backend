@@ -35,7 +35,7 @@ export const openrouterLlmDefinition: NodeDefinition = {
       group: "primary",
       handle: {
         type: "text",
-        color: "#3B82F6",
+        color: "#f59e0b",
       },
     },
     {
@@ -46,7 +46,7 @@ export const openrouterLlmDefinition: NodeDefinition = {
       defaultValue: "",
       handle: {
         type: "text",
-        color: "#3B82F6",
+        color: "#f59e0b",
       },
     },
     {
@@ -56,7 +56,7 @@ export const openrouterLlmDefinition: NodeDefinition = {
       group: "primary",
       handle: {
         type: "image",
-        color: "#F97316",
+        color: "#3b82f6",
       },
     },
     {
@@ -66,7 +66,7 @@ export const openrouterLlmDefinition: NodeDefinition = {
       group: "primary",
       handle: {
         type: "video",
-        color: "#3B82F6",
+        color: "#22c55e",
       },
     },
     {
@@ -76,7 +76,7 @@ export const openrouterLlmDefinition: NodeDefinition = {
       group: "primary",
       handle: {
         type: "audio",
-        color: "#10B981",
+        color: "#ec4899",
       },
     },
     {
@@ -126,7 +126,7 @@ export const openrouterLlmDefinition: NodeDefinition = {
       type: "text",
       handle: {
         type: "text",
-        color: "#3B82F6",
+        color: "#f59e0b",
       },
     },
   ],

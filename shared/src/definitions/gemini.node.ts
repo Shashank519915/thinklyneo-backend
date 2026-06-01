@@ -35,7 +35,7 @@ export const geminiDefinition: NodeDefinition = {
       group: "primary",
       handle: {
         type: "text",
-        color: "#8B5CF6",
+        color: "#f59e0b",
       },
     },
     {
@@ -46,7 +46,7 @@ export const geminiDefinition: NodeDefinition = {
       defaultValue: "",
       handle: {
         type: "text",
-        color: "#8B5CF6",
+        color: "#f59e0b",
       },
     },
     {
@@ -56,7 +56,7 @@ export const geminiDefinition: NodeDefinition = {
       group: "primary",
       handle: {
         type: "image",
-        color: "#F97316",
+        color: "#3b82f6",
       },
     },
     {
@@ -66,7 +66,7 @@ export const geminiDefinition: NodeDefinition = {
       group: "primary",
       handle: {
         type: "video",
-        color: "#8B5CF6",
+        color: "#22c55e",
       },
     },
     {
@@ -76,7 +76,7 @@ export const geminiDefinition: NodeDefinition = {
       group: "primary",
       handle: {
         type: "audio",
-        color: "#10B981",
+        color: "#ec4899",
       },
     },
     {
@@ -86,7 +86,7 @@ export const geminiDefinition: NodeDefinition = {
       group: "primary",
       handle: {
         type: "file",
-        color: "#6B7280",
+        color: "#6b7280",
       },
     },
     {
@@ -126,7 +126,7 @@ export const geminiDefinition: NodeDefinition = {
       type: "text",
       handle: {
         type: "text",
-        color: "#8B5CF6",
+        color: "#f59e0b",
       },
     },
   ],

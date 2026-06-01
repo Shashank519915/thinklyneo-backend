@@ -29,7 +29,7 @@ export const mergeVideoDefinition: NodeDefinition = {
       group: "primary",
       handle: {
         type: "video",
-        color: "#3B82F6",
+        color: "#22c55e",
       },
     },
     {
@@ -40,7 +40,7 @@ export const mergeVideoDefinition: NodeDefinition = {
       group: "primary",
       handle: {
         type: "video",
-        color: "#3B82F6",
+        color: "#22c55e",
       },
     },
     {
@@ -50,7 +50,7 @@ export const mergeVideoDefinition: NodeDefinition = {
       group: "advanced",
       handle: {
         type: "video",
-        color: "#3B82F6",
+        color: "#22c55e",
       },
     },
   ],
@@ -61,7 +61,7 @@ export const mergeVideoDefinition: NodeDefinition = {
       type: "video",
       handle: {
         type: "video",
-        color: "#3B82F6",
+        color: "#22c55e",
       },
     },
   ],

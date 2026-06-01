@@ -28,7 +28,7 @@ export const mergeAVDefinition: NodeDefinition = {
       group: "primary",
       handle: {
         type: "video",
-        color: "#3B82F6",
+        color: "#22c55e",
       },
     },
     {
@@ -39,7 +39,7 @@ export const mergeAVDefinition: NodeDefinition = {
       group: "primary",
       handle: {
         type: "audio",
-        color: "#10B981",
+        color: "#ec4899",
       },
     },
   ],
@@ -50,7 +50,7 @@ export const mergeAVDefinition: NodeDefinition = {
       type: "video",
       handle: {
         type: "video",
-        color: "#3B82F6",
+        color: "#22c55e",
       },
     },
   ],

@@ -31,7 +31,7 @@ export const cropImageDefinition: NodeDefinition = {
       group: "primary",
       handle: {
         type: "image",
-        color: "#F97316",
+        color: "#3b82f6",
       },
     },
     {
@@ -45,7 +45,7 @@ export const cropImageDefinition: NodeDefinition = {
       group: "primary",
       handle: {
         type: "text",
-        color: "#EC4899",
+        color: "#10b981",
       },
     },
     {
@@ -59,7 +59,7 @@ export const cropImageDefinition: NodeDefinition = {
       group: "primary",
       handle: {
         type: "text",
-        color: "#EC4899",
+        color: "#10b981",
       },
     },
     {
@@ -73,7 +73,7 @@ export const cropImageDefinition: NodeDefinition = {
       group: "primary",
       handle: {
         type: "text",
-        color: "#EC4899",
+        color: "#10b981",
       },
     },
     {
@@ -87,7 +87,7 @@ export const cropImageDefinition: NodeDefinition = {
       group: "primary",
       handle: {
         type: "text",
-        color: "#EC4899",
+        color: "#10b981",
       },
     },
   ],
@@ -98,7 +98,7 @@ export const cropImageDefinition: NodeDefinition = {
       type: "image",
       handle: {
         type: "image",
-        color: "#F97316",
+        color: "#3b82f6",
       },
     },
   ],

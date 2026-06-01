@@ -27,7 +27,7 @@ export const extractAudioDefinition: NodeDefinition = {
       group: "primary",
       handle: {
         type: "video",
-        color: "#3B82F6",
+        color: "#22c55e",
       },
     },
   ],
@@ -38,7 +38,7 @@ export const extractAudioDefinition: NodeDefinition = {
       type: "audio",
       handle: {
         type: "audio",
-        color: "#10B981",
+        color: "#ec4899",
       },
     },
   ],

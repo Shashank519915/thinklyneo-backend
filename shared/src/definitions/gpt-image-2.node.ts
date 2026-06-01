@@ -92,7 +92,7 @@ export const gptImage2Definition: NodeDefinition = {
       ],
       handle: {
         type: "text",
-        color: "#ec4899", // Pink
+        color: "#f59e0b",
       },
     },
     {
