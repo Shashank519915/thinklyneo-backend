@@ -1,5 +1,12 @@
 /**
  * @fileoverview Trigger.dev `crop-image` task implementing mandatory pause, FFmpeg-based crop in temp dirs, Transloadit REST upload.
+ *
+ * Resilience:
+ *  - MANDATORY 30s wait (spec requirement) via wait.for() — not skippable.
+ *  - try/finally ensures temp files (input + output) are always cleaned up.
+ *  - Two-provider fallback: main-ffmpeg → backup-stub (canned image URL)
+ *  - Top-level try/catch prevents 1-hour waitpoint token hangs on unexpected crashes.
+ *  - maxDuration: 360s (30s mandatory + FFmpeg processing + Transloadit upload)
  */
 
 import { task, wait } from "@trigger.dev/sdk/v3";
@@ -158,6 +165,15 @@ async function pollTransloaditAssembly(assemblyUrl: string): Promise<string> {
  *
  * NOTE: Mirrors API-route resilience by preferring multipart REST upload over SDK file-path writes in ephemeral FS.
  */
+/** Silently removes a temp file if it exists. */
+function cleanupFile(filePath: string): void {
+  try {
+    if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+  } catch {
+    // ignore cleanup errors
+  }
+}
+
 import { cropImageDefinition } from "@galaxy/shared";
 
 interface ProviderAttempt {
@@ -169,6 +185,7 @@ interface ProviderAttempt {
 
 export const cropImageTask = task({
   id: "crop-image",
+  maxDuration: 360, // 6 minutes: 30s mandatory + FFmpeg processing + Transloadit upload
   run: async (payload: CropImagePayload) => {
     const {
       imageUrl,
@@ -192,149 +209,162 @@ export const cropImageTask = task({
     let outputUrl: string | null = null;
     let logs = "";
 
-    // ── Provider 1: main-ffmpeg (Real execution) ────────────────────────
-    const pStartMain = Date.now();
     try {
-      logs += `[main-ffmpeg] Attempting real FFmpeg crop...\n`;
-      if (!imageUrl) throw new Error("No image URL provided for crop operation");
-
-      // MANDATORY 30-second delay (hard requirement from spec)
-      console.log("[CropImageTask] ⏳ Starting mandatory 30-second delay...");
-      logs += `[main-ffmpeg] Starting mandatory 30-second delay...\n`;
-      await wait.for({ seconds: 30 });
-      console.log("[CropImageTask] ✅ 30-second delay complete");
-      logs += `[main-ffmpeg] 30-second delay complete\n`;
-
-      // Get image as Buffer
-      let inputBuffer: Buffer;
-      if (imageUrl.startsWith("data:")) {
-        console.log("[CropImageTask] Input: base64 data URI — decoding");
-        const base64Data = imageUrl.split(",")[1];
-        if (!base64Data) throw new Error("Invalid base64 data URI");
-        inputBuffer = Buffer.from(base64Data, "base64");
-      } else {
-        console.log("[CropImageTask] Input: remote URL — downloading");
-        const dlResponse = await fetch(imageUrl);
-        if (!dlResponse.ok) throw new Error(`Failed to download image: ${dlResponse.statusText}`);
-        inputBuffer = Buffer.from(await dlResponse.arrayBuffer());
-      }
-
-      // Write to temp file for FFmpeg
+      const pStartMain = Date.now();
       const tmpDir = os.tmpdir();
       const inputPath = path.join(tmpDir, `input_${nodeRunId}.jpg`);
       const outputPath = path.join(tmpDir, `output_${nodeRunId}.jpg`);
-      fs.writeFileSync(inputPath, inputBuffer);
 
-      // FFmpeg crop
-      const Ffmpeg = (await import("fluent-ffmpeg")).default;
-      await new Promise<void>((resolve, reject) => {
-        Ffmpeg(inputPath)
-          .outputOptions([
-            `-vf crop=iw*${w / 100}:ih*${h / 100}:iw*${x / 100}:ih*${y / 100}`,
-          ])
-          .output(outputPath)
-          .on("end", () => resolve())
-          .on("error", (err) => reject(err))
-          .run();
-      });
-
-      // Read cropped file and upload
-      const croppedBuffer = fs.readFileSync(outputPath);
-      fs.unlink(inputPath, () => {});
-      fs.unlink(outputPath, () => {});
-
-      outputUrl = await uploadBufferToTransloadit(
-        croppedBuffer,
-        `cropped_${nodeRunId}.jpg`
-      );
-
-      successfulProvider = "main-ffmpeg";
-      attempts.push({
-        providerId: "main-ffmpeg",
-        status: "success",
-        durationMs: Date.now() - pStartMain,
-      });
-      logs += `[main-ffmpeg] Success: Crop completed and uploaded to ${outputUrl}\n`;
-    } catch (err: any) {
-      const pDurMain = Date.now() - pStartMain;
-      console.warn(`[CropImageTask] ⚠️ Provider main-ffmpeg failed in ${pDurMain}ms:`, err.message);
-      logs += `[main-ffmpeg] Failure after ${pDurMain}ms: ${err.message}\n`;
-      attempts.push({
-        providerId: "main-ffmpeg",
-        status: "failed",
-        error: err.message,
-        durationMs: pDurMain,
-      });
-
-      // ── Provider 2: backup-stub (Fallback execution) ──────────────────
-      const pStartBackup = Date.now();
       try {
-        logs += `[backup-stub] Attempting fallback stub...\n`;
-        await wait.for({ seconds: 2 }); // Short simulated delay
-        
-        // Return a canned placeholder image
-        outputUrl = "https://images.transloadit.com/examples/landscape.jpg";
-        successfulProvider = "backup-stub";
+        logs += `[main-ffmpeg] Attempting real FFmpeg crop...\n`;
+        if (!imageUrl) throw new Error("No image URL provided for crop operation");
+
+        // MANDATORY 30-second delay (hard requirement from spec)
+        console.log("[CropImageTask] ⏳ Starting mandatory 30-second delay...");
+        logs += `[main-ffmpeg] Starting mandatory 30-second delay...\n`;
+        await wait.for({ seconds: 30 });
+        console.log("[CropImageTask] ✅ 30-second delay complete");
+        logs += `[main-ffmpeg] 30-second delay complete\n`;
+
+        // Get image as Buffer
+        let inputBuffer: Buffer;
+        if (imageUrl.startsWith("data:")) {
+          console.log("[CropImageTask] Input: base64 data URI — decoding");
+          const base64Data = imageUrl.split(",")[1];
+          if (!base64Data) throw new Error("Invalid base64 data URI");
+          inputBuffer = Buffer.from(base64Data, "base64");
+        } else {
+          console.log("[CropImageTask] Input: remote URL — downloading");
+          const dlResponse = await fetch(imageUrl);
+          if (!dlResponse.ok) throw new Error(`Failed to download image: ${dlResponse.statusText}`);
+          inputBuffer = Buffer.from(await dlResponse.arrayBuffer());
+        }
+
+        // Write to temp file for FFmpeg
+        fs.writeFileSync(inputPath, inputBuffer);
+
+        // FFmpeg crop
+        const Ffmpeg = (await import("fluent-ffmpeg")).default;
+        await new Promise<void>((resolve, reject) => {
+          Ffmpeg(inputPath)
+            .outputOptions([
+              `-vf crop=iw*${w / 100}:ih*${h / 100}:iw*${x / 100}:ih*${y / 100}`,
+            ])
+            .output(outputPath)
+            .on("end", () => resolve())
+            .on("error", (err) => reject(err))
+            .run();
+        });
+
+        // Read cropped file and upload
+        const croppedBuffer = fs.readFileSync(outputPath);
+
+        outputUrl = await uploadBufferToTransloadit(
+          croppedBuffer,
+          `cropped_${nodeRunId}.jpg`
+        );
+
+        successfulProvider = "main-ffmpeg";
         attempts.push({
-          providerId: "backup-stub",
+          providerId: "main-ffmpeg",
           status: "success",
-          durationMs: Date.now() - pStartBackup,
+          durationMs: Date.now() - pStartMain,
         });
-        logs += `[backup-stub] Success: Fallback generated canned preview URL: ${outputUrl}\n`;
-      } catch (backupErr: any) {
-        const pDurBackup = Date.now() - pStartBackup;
-        logs += `[backup-stub] Failure after ${pDurBackup}ms: ${backupErr.message}\n`;
+        logs += `[main-ffmpeg] Success: Crop completed and uploaded to ${outputUrl}\n`;
+      } catch (err: any) {
+        const pDurMain = Date.now() - pStartMain;
+        console.warn(`[CropImageTask] ⚠️ Provider main-ffmpeg failed in ${pDurMain}ms:`, err.message);
+        logs += `[main-ffmpeg] Failure after ${pDurMain}ms: ${err.message}\n`;
         attempts.push({
-          providerId: "backup-stub",
+          providerId: "main-ffmpeg",
           status: "failed",
-          error: backupErr.message,
-          durationMs: pDurBackup,
+          error: err.message,
+          durationMs: pDurMain,
         });
-        
-        // Both failed
-        const durationMs = Date.now() - startMs;
-        if (workflowId && orchestratorRunId && waitpointTokenId) {
+
+        // ── Provider 2: backup-stub (Fallback execution) ──────────────────
+        const pStartBackup = Date.now();
+        try {
+          logs += `[backup-stub] Attempting fallback stub...\n`;
+          await wait.for({ seconds: 2 }); // Short simulated delay
+          
+          // Return a canned placeholder image
+          outputUrl = "https://images.transloadit.com/examples/landscape.jpg";
+          successfulProvider = "backup-stub";
+          attempts.push({
+            providerId: "backup-stub",
+            status: "success",
+            durationMs: Date.now() - pStartBackup,
+          });
+          logs += `[backup-stub] Success: Fallback generated canned preview URL: ${outputUrl}\n`;
+        } catch (backupErr: any) {
+          const pDurBackup = Date.now() - pStartBackup;
+          logs += `[backup-stub] Failure after ${pDurBackup}ms: ${backupErr.message}\n`;
+          attempts.push({
+            providerId: "backup-stub",
+            status: "failed",
+            error: backupErr.message,
+            durationMs: pDurBackup,
+          });
+          
+          // Both failed
+          throw new Error(`All providers failed: ${err.message} -> ${backupErr.message}`);
+        }
+      } finally {
+        // Always clean up temp files regardless of success or failure
+        cleanupFile(inputPath);
+        cleanupFile(outputPath);
+      }
+
+      const durationMs = Date.now() - startMs;
+      const creditCost = cropImageDefinition.credits.base;
+
+      // Notify the coordinator task if coordination fields are provided
+      if (workflowId && orchestratorRunId && waitpointTokenId) {
+        await notifyCoordinator({
+          workflowId,
+          runId,
+          nodeId: nodeRunId,
+          status: "success",
+          output: outputUrl,
+          durationMs,
+          orchestratorRunId,
+          waitpointTokenId,
+          providerUsed: successfulProvider,
+          providerAttempts: attempts,
+          logs,
+          creditCost,
+        });
+      }
+
+      return { outputUrl, runId, nodeRunId };
+
+    } catch (fatalErr: any) {
+      // Top-level guard: prevents hung 1-hour waitpoint tokens on unexpected crashes
+      const durationMs = Date.now() - startMs;
+      const fatalMsg = fatalErr instanceof Error ? fatalErr.message : String(fatalErr);
+      console.error(`[CropImageTask] 💥 Fatal unhandled error: ${fatalMsg}`);
+      if (workflowId && orchestratorRunId && waitpointTokenId) {
+        try {
           await notifyCoordinator({
             workflowId,
             runId,
             nodeId: nodeRunId,
             status: "failed",
-            error: `All providers failed: ${err.message} -> ${backupErr.message}`,
+            error: `Fatal error: ${fatalMsg}`,
             durationMs,
             orchestratorRunId,
             waitpointTokenId,
             providerUsed: null,
             providerAttempts: attempts,
-            logs,
+            logs: logs + `\n[FATAL] ${fatalMsg}`,
             creditCost: 0,
           });
+        } catch (notifyErr) {
+          console.error(`[CropImageTask] Failed to notify coordinator after fatal error:`, notifyErr);
         }
-        throw new Error(`All providers failed: ${err.message} -> ${backupErr.message}`);
       }
+      throw fatalErr;
     }
-
-    const durationMs = Date.now() - startMs;
-    const creditCost = cropImageDefinition.credits.base;
-
-    // Notify the coordinator task if coordination fields are provided
-    if (workflowId && orchestratorRunId && waitpointTokenId) {
-      await notifyCoordinator({
-        workflowId,
-        runId,
-        nodeId: nodeRunId,
-        status: "success",
-        output: outputUrl,
-        durationMs,
-        orchestratorRunId,
-        waitpointTokenId,
-        providerUsed: successfulProvider,
-        providerAttempts: attempts,
-        logs,
-        creditCost,
-      });
-    }
-
-    return { outputUrl, runId, nodeRunId };
   },
 });
-

@@ -1,5 +1,11 @@
 /**
  * @fileoverview Trigger.dev `gpt-image-2` task simulating async image generation webhook callbacks.
+ *
+ * Resilience:
+ *  - Two-provider fallback: gpt-image-webhook → backup-stub
+ *  - Top-level try/catch ensures the orchestrator is always notified even on
+ *    unexpected crashes (prevents 1-hour waitpoint token hangs).
+ *  - maxDuration: 120s (10s stub delay + coordinator roundtrip + buffer)
  */
 
 import { task, wait, tasks } from "@trigger.dev/sdk/v3";
@@ -26,6 +32,7 @@ interface ProviderAttempt {
 
 export const gptImage2Task = task({
   id: "gpt-image-2",
+  maxDuration: 120, // 2 minutes: 10s stub delay + coordinator roundtrip + buffer
   run: async (payload: GptImage2Payload) => {
     const {
       prompt,
@@ -47,121 +54,151 @@ export const gptImage2Task = task({
     let outputUrl: string | null = null;
     let logs = "";
 
-    // ── Provider 1: gpt-image-webhook (Simulated webhook wait) ───────────────
-    const pStartMain = Date.now();
     try {
-      logs += `[gpt-image-webhook] Creating waitpoint token for callback...\n`;
-      
-      // 1. Create a waitpoint token with a 5-minute timeout
-      const token = await wait.createToken({ timeout: "5m" });
-      logs += `[gpt-image-webhook] Token created: ${token.id}. Triggering callback simulation...\n`;
-
-      // 2. Trigger the simulate-callback task asynchronously (non-blocking)
-      await tasks.trigger("simulate-callback", {
-        tokenId: token.id,
-        nodeType: "gptImage2",
-        prompt,
-        delaySeconds: 10, // Wait 10 seconds to simulate remote API latency
-      });
-
-      // 3. Suspend current task run until the token is completed
-      logs += `[gpt-image-webhook] Task suspended. Waiting for webhook callback simulation...\n`;
-      const result = await wait.forToken<{ output: string }>(token.id);
-
-      if (!result.ok) {
-        throw result.error instanceof Error ? result.error : new Error(String(result.error ?? "Waitpoint token timed out or failed"));
-      }
-
-      outputUrl = result.output.output;
-      if (!outputUrl) {
-        throw new Error("Callback simulation did not return an output URL");
-      }
-
-      successfulProvider = "gpt-image-webhook";
-      attempts.push({
-        providerId: "gpt-image-webhook",
-        status: "success",
-        durationMs: Date.now() - pStartMain,
-      });
-      logs += `[gpt-image-webhook] Success: Callback resumed task. Output URL: ${outputUrl}\n`;
-    } catch (err: any) {
-      const pDurMain = Date.now() - pStartMain;
-      console.warn(`[GptImage2Task] ⚠️ Provider gpt-image-webhook failed in ${pDurMain}ms:`, err.message);
-      logs += `[gpt-image-webhook] Failure after ${pDurMain}ms: ${err.message}\n`;
-      attempts.push({
-        providerId: "gpt-image-webhook",
-        status: "failed",
-        error: err.message,
-        durationMs: pDurMain,
-      });
-
-      // ── Provider 2: backup-stub (Simulated backup stub) ──────────────────
-      const pStartBackup = Date.now();
+      // ── Provider 1: gpt-image-webhook (Simulated webhook wait) ───────────────
+      const pStartMain = Date.now();
       try {
-        logs += `[backup-stub] Attempting fallback stub...\n`;
-        await wait.for({ seconds: 2 }); // Short simulated delay
-        
-        outputUrl = "https://images.transloadit.com/examples/landscape.jpg";
-        successfulProvider = "backup-stub";
+        logs += `[gpt-image-webhook] Creating waitpoint token for callback...\n`;
+
+        // 1. Create a waitpoint token with a 5-minute timeout
+        const token = await wait.createToken({ timeout: "5m" });
+        logs += `[gpt-image-webhook] Token created: ${token.id}. Triggering callback simulation...\n`;
+
+        // 2. Trigger the simulate-callback task asynchronously (non-blocking)
+        await tasks.trigger("simulate-callback", {
+          tokenId: token.id,
+          nodeType: "gptImage2",
+          prompt,
+          delaySeconds: 10, // 10s simulates remote API latency
+        });
+
+        // 3. Suspend current task run until the token is completed
+        logs += `[gpt-image-webhook] Task suspended. Waiting for webhook callback simulation...\n`;
+        const result = await wait.forToken<{ output: string }>(token.id);
+
+        if (!result.ok) {
+          throw result.error instanceof Error ? result.error : new Error(String(result.error ?? "Waitpoint token timed out or failed"));
+        }
+
+        outputUrl = result.output.output;
+        if (!outputUrl) {
+          throw new Error("Callback simulation did not return an output URL");
+        }
+
+        successfulProvider = "gpt-image-webhook";
         attempts.push({
-          providerId: "backup-stub",
+          providerId: "gpt-image-webhook",
           status: "success",
-          durationMs: Date.now() - pStartBackup,
+          durationMs: Date.now() - pStartMain,
         });
-        logs += `[backup-stub] Success: Fallback generated canned image URL: ${outputUrl}\n`;
-      } catch (backupErr: any) {
-        const pDurBackup = Date.now() - pStartBackup;
-        logs += `[backup-stub] Failure after ${pDurBackup}ms: ${backupErr.message}\n`;
+        logs += `[gpt-image-webhook] Success: Callback resumed task. Output URL: ${outputUrl}\n`;
+      } catch (err: any) {
+        const pDurMain = Date.now() - pStartMain;
+        console.warn(`[GptImage2Task] ⚠️ Provider gpt-image-webhook failed in ${pDurMain}ms:`, err.message);
+        logs += `[gpt-image-webhook] Failure after ${pDurMain}ms: ${err.message}\n`;
         attempts.push({
-          providerId: "backup-stub",
+          providerId: "gpt-image-webhook",
           status: "failed",
-          error: backupErr.message,
-          durationMs: pDurBackup,
+          error: err.message,
+          durationMs: pDurMain,
         });
-        
-        // Both failed
-        const durationMs = Date.now() - startMs;
-        if (workflowId && orchestratorRunId && waitpointTokenId) {
+
+        // ── Provider 2: backup-stub (Simulated backup stub) ──────────────────
+        const pStartBackup = Date.now();
+        try {
+          logs += `[backup-stub] Attempting fallback stub...\n`;
+          await wait.for({ seconds: 2 }); // Short simulated delay
+
+          outputUrl = "https://images.transloadit.com/examples/landscape.jpg";
+          successfulProvider = "backup-stub";
+          attempts.push({
+            providerId: "backup-stub",
+            status: "success",
+            durationMs: Date.now() - pStartBackup,
+          });
+          logs += `[backup-stub] Success: Fallback generated canned image URL: ${outputUrl}\n`;
+        } catch (backupErr: any) {
+          const pDurBackup = Date.now() - pStartBackup;
+          logs += `[backup-stub] Failure after ${pDurBackup}ms: ${backupErr.message}\n`;
+          attempts.push({
+            providerId: "backup-stub",
+            status: "failed",
+            error: backupErr.message,
+            durationMs: pDurBackup,
+          });
+
+          // Both providers failed — notify coordinator and rethrow
+          const durationMs = Date.now() - startMs;
+          if (workflowId && orchestratorRunId && waitpointTokenId) {
+            await notifyCoordinator({
+              workflowId,
+              runId,
+              nodeId: nodeRunId,
+              status: "failed",
+              error: `All providers failed: ${err.message} -> ${backupErr.message}`,
+              durationMs,
+              orchestratorRunId,
+              waitpointTokenId,
+              providerUsed: null,
+              providerAttempts: attempts,
+              logs,
+              creditCost: 0,
+            });
+          }
+          throw new Error(`All providers failed: ${err.message} -> ${backupErr.message}`);
+        }
+      }
+
+      const durationMs = Date.now() - startMs;
+      const creditCost = gptImage2Definition.credits.base;
+
+      // Notify the coordinator task if coordination fields are provided
+      if (workflowId && orchestratorRunId && waitpointTokenId) {
+        await notifyCoordinator({
+          workflowId,
+          runId,
+          nodeId: nodeRunId,
+          status: "success",
+          output: { result: outputUrl }, // Matches gptImage2OutputSchema (expects { result: string })
+          durationMs,
+          orchestratorRunId,
+          waitpointTokenId,
+          providerUsed: successfulProvider,
+          providerAttempts: attempts,
+          logs,
+          creditCost,
+        });
+      }
+
+      return { result: outputUrl, runId, nodeRunId };
+
+    } catch (fatalErr: any) {
+      // Top-level guard: any throw outside provider blocks (e.g., Trigger.dev API errors,
+      // notifyCoordinator failures) gets caught here so the run is never left hanging.
+      const durationMs = Date.now() - startMs;
+      const fatalMsg = fatalErr instanceof Error ? fatalErr.message : String(fatalErr);
+      console.error(`[GptImage2Task] 💥 Fatal unhandled error: ${fatalMsg}`);
+      if (workflowId && orchestratorRunId && waitpointTokenId) {
+        try {
           await notifyCoordinator({
             workflowId,
             runId,
             nodeId: nodeRunId,
             status: "failed",
-            error: `All providers failed: ${err.message} -> ${backupErr.message}`,
+            error: `Fatal error: ${fatalMsg}`,
             durationMs,
             orchestratorRunId,
             waitpointTokenId,
             providerUsed: null,
             providerAttempts: attempts,
-            logs,
+            logs: logs + `\n[FATAL] ${fatalMsg}`,
             creditCost: 0,
           });
+        } catch (notifyErr) {
+          console.error(`[GptImage2Task] Failed to notify coordinator after fatal error:`, notifyErr);
         }
-        throw new Error(`All providers failed: ${err.message} -> ${backupErr.message}`);
       }
+      throw fatalErr;
     }
-
-    const durationMs = Date.now() - startMs;
-    const creditCost = gptImage2Definition.credits.base;
-
-    // Notify the coordinator task if coordination fields are provided
-    if (workflowId && orchestratorRunId && waitpointTokenId) {
-      await notifyCoordinator({
-        workflowId,
-        runId,
-        nodeId: nodeRunId,
-        status: "success",
-        output: { result: outputUrl }, // Matches gptImage2OutputSchema (expects { result: string })
-        durationMs,
-        orchestratorRunId,
-        waitpointTokenId,
-        providerUsed: successfulProvider,
-        providerAttempts: attempts,
-        logs,
-        creditCost,
-      });
-    }
-
-    return { result: outputUrl, runId, nodeRunId };
   },
 });

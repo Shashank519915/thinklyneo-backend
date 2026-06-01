@@ -1,9 +1,15 @@
 /**
- * @fileoverview Trigger.dev `gemini-inference`: Paired to OpenRouter completions with prioritized provider fallback.
+ * @fileoverview Trigger.dev `gemini-inference`: OpenRouter completions with provider fallback.
+ *
+ * Resilience:
+ *  - Two-provider fallback: main-openrouter → backup-stub
+ *  - Durable 15s API timeout via wait.for() (not setTimeout)
+ *  - Top-level try/catch prevents 1-hour waitpoint token hangs on unexpected crashes
+ *  - maxDuration: 120s
  */
 
 import { task, wait } from "@trigger.dev/sdk/v3";
-import { notifyCoordinator } from "./utils";
+import { notifyCoordinator, callWithDurableTimeout } from "./utils";
 import { openrouterLlmDefinition } from "@galaxy/shared";
 
 interface GeminiPayload {
@@ -28,58 +34,52 @@ interface ProviderAttempt {
   durationMs: number;
 }
 
-async function callOpenRouter(payload: {
-  model: string;
-  prompt: string;
-  systemPrompt?: string | null;
-  images?: string[];
-  temperature?: number;
-  maxTokens?: number;
-  topP?: number;
-}, signal?: AbortSignal): Promise<string> {
+async function callOpenRouter(
+  payload: {
+    model: string;
+    prompt: string;
+    systemPrompt?: string | null;
+    images?: string[];
+    temperature?: number;
+    maxTokens?: number;
+    topP?: number;
+  },
+  signal?: AbortSignal
+): Promise<string> {
   const apiKey = process.env.OPENROUTER_API_KEY;
   if (!apiKey) {
     throw new Error("OPENROUTER_API_KEY environment variable is not configured on backend");
   }
 
-  // Map "gemini-2.5-flash" to "google/gemini-2.5-flash" for OpenRouter
-  // If model is unset or empty, use the free Llama-3.3-70b model on OpenRouter
-  const targetModel = payload.model === "gemini-2.5-flash"
-    ? "google/gemini-2.5-flash"
-    : payload.model
-      ? payload.model
-      : "meta-llama/llama-3.3-70b-instruct:free";
+  const targetModel =
+    payload.model === "gemini-2.5-flash"
+      ? "google/gemini-2.5-flash"
+      : payload.model
+        ? payload.model
+        : "meta-llama/llama-3.3-70b-instruct:free";
 
-  const messages: any[] = [];
+  const messages: Array<Record<string, unknown>> = [];
 
   if (payload.systemPrompt && payload.systemPrompt.trim()) {
-    messages.push({
-      role: "system",
-      content: payload.systemPrompt,
-    });
+    messages.push({ role: "system", content: payload.systemPrompt });
   }
 
-  const userContent: any[] = [{ type: "text", text: payload.prompt }];
+  const userContent: Array<Record<string, unknown>> = [{ type: "text", text: payload.prompt }];
 
   if (payload.images && payload.images.length > 0) {
     for (const imgUrl of payload.images) {
       if (imgUrl) {
         userContent.push({
           type: "image_url",
-          image_url: {
-            url: imgUrl,
-          },
+          image_url: { url: imgUrl },
         });
       }
     }
   }
 
-  messages.push({
-    role: "user",
-    content: userContent,
-  });
+  messages.push({ role: "user", content: userContent });
 
-  console.log(`[OpenRouter Task] Invoking model: ${targetModel}`);
+  console.log(`[GeminiTask] Invoking model: ${targetModel}`);
   const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
     method: "POST",
     headers: {
@@ -114,6 +114,7 @@ async function callOpenRouter(payload: {
 
 export const geminiTask = task({
   id: "gemini-inference",
+  maxDuration: 120,
   run: async (payload: GeminiPayload) => {
     const {
       model,
@@ -138,115 +139,133 @@ export const geminiTask = task({
     let responseText: string | null = null;
     let logs = "";
 
-    // ── Provider 1: main-openrouter (Real execution) ────────────────────────
-    const pStartMain = Date.now();
     try {
-      logs += `[main-openrouter] Attempting OpenRouter completion...\n`;
-      
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 15000); // 15-second timeout for primary API call
-
+      const pStartMain = Date.now();
       try {
-        responseText = await callOpenRouter({
-          model,
-          prompt,
-          systemPrompt,
-          images,
-          temperature,
-          maxTokens,
-          topP,
-        }, controller.signal);
-      } finally {
-        clearTimeout(timeoutId);
+        logs += `[main-openrouter] Attempting OpenRouter completion...\n`;
+
+        responseText = await callWithDurableTimeout(15, (signal) =>
+          callOpenRouter(
+            { model, prompt, systemPrompt, images, temperature, maxTokens, topP },
+            signal
+          )
+        );
+
+        successfulProvider = "main-openrouter";
+        attempts.push({
+          providerId: "main-openrouter",
+          status: "success",
+          durationMs: Date.now() - pStartMain,
+        });
+        logs += `[main-openrouter] Success: Completion completed successfully.\n`;
+      } catch (err: unknown) {
+        const pDurMain = Date.now() - pStartMain;
+        const errorMsg =
+          err instanceof Error && err.name === "AbortError"
+            ? "Request timed out after 15 seconds"
+            : err instanceof Error
+              ? err.message
+              : String(err);
+        console.warn(`[GeminiTask] ⚠️ Provider main-openrouter failed in ${pDurMain}ms:`, errorMsg);
+        logs += `[main-openrouter] Failure after ${pDurMain}ms: ${errorMsg}\n`;
+        attempts.push({
+          providerId: "main-openrouter",
+          status: "failed",
+          error: errorMsg,
+          durationMs: pDurMain,
+        });
+
+        const pStartBackup = Date.now();
+        try {
+          logs += `[backup-stub] Attempting fallback stub...\n`;
+          await wait.for({ seconds: 2 });
+
+          responseText = `[Backup Provider Stub Response]\nThis is a fallback response because the primary OpenRouter provider failed or timed out.\n\nPrompt: "${prompt}"`;
+          successfulProvider = "backup-stub";
+          attempts.push({
+            providerId: "backup-stub",
+            status: "success",
+            durationMs: Date.now() - pStartBackup,
+          });
+          logs += `[backup-stub] Success: Fallback generated canned response.\n`;
+        } catch (backupErr: unknown) {
+          const pDurBackup = Date.now() - pStartBackup;
+          const backupMsg = backupErr instanceof Error ? backupErr.message : String(backupErr);
+          logs += `[backup-stub] Failure after ${pDurBackup}ms: ${backupMsg}\n`;
+          attempts.push({
+            providerId: "backup-stub",
+            status: "failed",
+            error: backupMsg,
+            durationMs: pDurBackup,
+          });
+
+          const durationMs = Date.now() - startMs;
+          if (workflowId && orchestratorRunId && waitpointTokenId) {
+            await notifyCoordinator({
+              workflowId,
+              runId,
+              nodeId: nodeRunId,
+              status: "failed",
+              error: `All providers failed: ${errorMsg} -> ${backupMsg}`,
+              durationMs,
+              orchestratorRunId,
+              waitpointTokenId,
+              providerUsed: null,
+              providerAttempts: attempts,
+              logs,
+              creditCost: 0,
+            });
+          }
+          throw new Error(`All providers failed: ${errorMsg} -> ${backupMsg}`);
+        }
       }
 
-      successfulProvider = "main-openrouter";
-      attempts.push({
-        providerId: "main-openrouter",
-        status: "success",
-        durationMs: Date.now() - pStartMain,
-      });
-      logs += `[main-openrouter] Success: Completion completed successfully.\n`;
-    } catch (err: any) {
-      const pDurMain = Date.now() - pStartMain;
-      const errorMsg = err.name === "AbortError" ? "Request timed out after 15 seconds" : err.message;
-      console.warn(`[GeminiTask] ⚠️ Provider main-openrouter failed in ${pDurMain}ms:`, errorMsg);
-      logs += `[main-openrouter] Failure after ${pDurMain}ms: ${errorMsg}\n`;
-      attempts.push({
-        providerId: "main-openrouter",
-        status: "failed",
-        error: errorMsg,
-        durationMs: pDurMain,
-      });
+      const durationMs = Date.now() - startMs;
+      const creditCost = openrouterLlmDefinition.credits.base;
 
-      // ── Provider 2: backup-stub (Fallback execution) ──────────────────
-      const pStartBackup = Date.now();
-      try {
-        logs += `[backup-stub] Attempting fallback stub...\n`;
-        await wait.for({ seconds: 2 }); // Short simulated delay
-
-        // Return a canned placeholder text response
-        responseText = `[Backup Provider Stub Response]\nThis is a fallback response because the primary OpenRouter provider failed or timed out.\n\nPrompt: "${prompt}"`;
-        successfulProvider = "backup-stub";
-        attempts.push({
-          providerId: "backup-stub",
+      if (workflowId && orchestratorRunId && waitpointTokenId) {
+        await notifyCoordinator({
+          workflowId,
+          runId,
+          nodeId: nodeRunId,
           status: "success",
-          durationMs: Date.now() - pStartBackup,
+          output: { response: responseText },
+          durationMs,
+          orchestratorRunId,
+          waitpointTokenId,
+          providerUsed: successfulProvider,
+          providerAttempts: attempts,
+          logs,
+          creditCost,
         });
-        logs += `[backup-stub] Success: Fallback generated canned response.\n`;
-      } catch (backupErr: any) {
-        const pDurBackup = Date.now() - pStartBackup;
-        logs += `[backup-stub] Failure after ${pDurBackup}ms: ${backupErr.message}\n`;
-        attempts.push({
-          providerId: "backup-stub",
-          status: "failed",
-          error: backupErr.message,
-          durationMs: pDurBackup,
-        });
+      }
 
-        // Both failed
-        const durationMs = Date.now() - startMs;
-        if (workflowId && orchestratorRunId && waitpointTokenId) {
+      return { response: responseText, runId, nodeRunId };
+    } catch (fatalErr: unknown) {
+      const durationMs = Date.now() - startMs;
+      const fatalMsg = fatalErr instanceof Error ? fatalErr.message : String(fatalErr);
+      console.error(`[GeminiTask] 💥 Fatal unhandled error: ${fatalMsg}`);
+      if (workflowId && orchestratorRunId && waitpointTokenId) {
+        try {
           await notifyCoordinator({
             workflowId,
             runId,
             nodeId: nodeRunId,
             status: "failed",
-            error: `All providers failed: ${errorMsg} -> ${backupErr.message}`,
+            error: `Fatal error: ${fatalMsg}`,
             durationMs,
             orchestratorRunId,
             waitpointTokenId,
             providerUsed: null,
             providerAttempts: attempts,
-            logs,
+            logs: logs + `\n[FATAL] ${fatalMsg}`,
             creditCost: 0,
           });
+        } catch (notifyErr) {
+          console.error(`[GeminiTask] Failed to notify coordinator after fatal error:`, notifyErr);
         }
-        throw new Error(`All providers failed: ${errorMsg} -> ${backupErr.message}`);
       }
+      throw fatalErr;
     }
-
-    const durationMs = Date.now() - startMs;
-    const creditCost = openrouterLlmDefinition.credits.base;
-
-    // Notify the coordinator task if coordination fields are provided
-    if (workflowId && orchestratorRunId && waitpointTokenId) {
-      await notifyCoordinator({
-        workflowId,
-        runId,
-        nodeId: nodeRunId,
-        status: "success",
-        output: { response: responseText }, // Needs to match openrouterLlmOutputSchema (which expects { response: string })
-        durationMs,
-        orchestratorRunId,
-        waitpointTokenId,
-        providerUsed: successfulProvider,
-        providerAttempts: attempts,
-        logs,
-        creditCost,
-      });
-    }
-
-    return { response: responseText, runId, nodeRunId };
   },
 });

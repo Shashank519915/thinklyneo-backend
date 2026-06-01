@@ -1,5 +1,10 @@
 /**
  * @fileoverview Trigger.dev `kling-v3` task simulating async video generation webhook callbacks.
+ *
+ * Resilience:
+ *  - Two-provider fallback: kling-webhook → backup-stub
+ *  - Top-level try/catch ensures the orchestrator is always notified on unexpected crashes.
+ *  - maxDuration: 120s (12s stub delay + coordinator roundtrip + buffer)
  */
 
 import { task, wait, tasks } from "@trigger.dev/sdk/v3";
@@ -27,6 +32,7 @@ interface ProviderAttempt {
 
 export const klingV3Task = task({
   id: "kling-v3",
+  maxDuration: 120, // 2 minutes: 12s stub delay + coordinator roundtrip + buffer
   run: async (payload: KlingV3Payload) => {
     const {
       prompt,
@@ -49,121 +55,150 @@ export const klingV3Task = task({
     let outputUrl: string | null = null;
     let logs = "";
 
-    // ── Provider 1: kling-webhook (Simulated webhook wait) ───────────────────
-    const pStartMain = Date.now();
     try {
-      logs += `[kling-webhook] Creating waitpoint token for callback...\n`;
-      
-      // 1. Create a waitpoint token with a 5-minute timeout
-      const token = await wait.createToken({ timeout: "5m" });
-      logs += `[kling-webhook] Token created: ${token.id}. Triggering callback simulation...\n`;
-
-      // 2. Trigger the simulate-callback task asynchronously (non-blocking)
-      await tasks.trigger("simulate-callback", {
-        tokenId: token.id,
-        nodeType: "klingV3",
-        prompt,
-        delaySeconds: 12, // Wait 12 seconds to simulate remote video generation latency
-      });
-
-      // 3. Suspend current task run until the token is completed
-      logs += `[kling-webhook] Task suspended. Waiting for webhook callback simulation...\n`;
-      const result = await wait.forToken<{ output: string }>(token.id);
-
-      if (!result.ok) {
-        throw result.error instanceof Error ? result.error : new Error(String(result.error ?? "Waitpoint token timed out or failed"));
-      }
-
-      outputUrl = result.output.output;
-      if (!outputUrl) {
-        throw new Error("Callback simulation did not return an output URL");
-      }
-
-      successfulProvider = "kling-webhook";
-      attempts.push({
-        providerId: "kling-webhook",
-        status: "success",
-        durationMs: Date.now() - pStartMain,
-      });
-      logs += `[kling-webhook] Success: Callback resumed task. Output URL: ${outputUrl}\n`;
-    } catch (err: any) {
-      const pDurMain = Date.now() - pStartMain;
-      console.warn(`[KlingV3Task] ⚠️ Provider kling-webhook failed in ${pDurMain}ms:`, err.message);
-      logs += `[kling-webhook] Failure after ${pDurMain}ms: ${err.message}\n`;
-      attempts.push({
-        providerId: "kling-webhook",
-        status: "failed",
-        error: err.message,
-        durationMs: pDurMain,
-      });
-
-      // ── Provider 2: backup-stub (Simulated backup stub) ──────────────────
-      const pStartBackup = Date.now();
+      // ── Provider 1: kling-webhook (Simulated webhook wait) ───────────────────
+      const pStartMain = Date.now();
       try {
-        logs += `[backup-stub] Attempting fallback stub...\n`;
-        await wait.for({ seconds: 2 }); // Short simulated delay
-        
-        outputUrl = "https://images.transloadit.com/examples/vertical.mp4";
-        successfulProvider = "backup-stub";
+        logs += `[kling-webhook] Creating waitpoint token for callback...\n`;
+
+        // 1. Create a waitpoint token with a 5-minute timeout
+        const token = await wait.createToken({ timeout: "5m" });
+        logs += `[kling-webhook] Token created: ${token.id}. Triggering callback simulation...\n`;
+
+        // 2. Trigger the simulate-callback task asynchronously (non-blocking)
+        await tasks.trigger("simulate-callback", {
+          tokenId: token.id,
+          nodeType: "klingV3",
+          prompt,
+          delaySeconds: 12, // 12s simulates video generation latency
+        });
+
+        // 3. Suspend current task run until the token is completed
+        logs += `[kling-webhook] Task suspended. Waiting for webhook callback simulation...\n`;
+        const result = await wait.forToken<{ output: string }>(token.id);
+
+        if (!result.ok) {
+          throw result.error instanceof Error ? result.error : new Error(String(result.error ?? "Waitpoint token timed out or failed"));
+        }
+
+        outputUrl = result.output.output;
+        if (!outputUrl) {
+          throw new Error("Callback simulation did not return an output URL");
+        }
+
+        successfulProvider = "kling-webhook";
         attempts.push({
-          providerId: "backup-stub",
+          providerId: "kling-webhook",
           status: "success",
-          durationMs: Date.now() - pStartBackup,
+          durationMs: Date.now() - pStartMain,
         });
-        logs += `[backup-stub] Success: Fallback generated canned video URL: ${outputUrl}\n`;
-      } catch (backupErr: any) {
-        const pDurBackup = Date.now() - pStartBackup;
-        logs += `[backup-stub] Failure after ${pDurBackup}ms: ${backupErr.message}\n`;
+        logs += `[kling-webhook] Success: Callback resumed task. Output URL: ${outputUrl}\n`;
+      } catch (err: any) {
+        const pDurMain = Date.now() - pStartMain;
+        console.warn(`[KlingV3Task] ⚠️ Provider kling-webhook failed in ${pDurMain}ms:`, err.message);
+        logs += `[kling-webhook] Failure after ${pDurMain}ms: ${err.message}\n`;
         attempts.push({
-          providerId: "backup-stub",
+          providerId: "kling-webhook",
           status: "failed",
-          error: backupErr.message,
-          durationMs: pDurBackup,
+          error: err.message,
+          durationMs: pDurMain,
         });
-        
-        // Both failed
-        const durationMs = Date.now() - startMs;
-        if (workflowId && orchestratorRunId && waitpointTokenId) {
+
+        // ── Provider 2: backup-stub (Simulated backup stub) ──────────────────
+        const pStartBackup = Date.now();
+        try {
+          logs += `[backup-stub] Attempting fallback stub...\n`;
+          await wait.for({ seconds: 2 }); // Short simulated delay
+
+          outputUrl = "https://images.transloadit.com/examples/vertical.mp4";
+          successfulProvider = "backup-stub";
+          attempts.push({
+            providerId: "backup-stub",
+            status: "success",
+            durationMs: Date.now() - pStartBackup,
+          });
+          logs += `[backup-stub] Success: Fallback generated canned video URL: ${outputUrl}\n`;
+        } catch (backupErr: any) {
+          const pDurBackup = Date.now() - pStartBackup;
+          logs += `[backup-stub] Failure after ${pDurBackup}ms: ${backupErr.message}\n`;
+          attempts.push({
+            providerId: "backup-stub",
+            status: "failed",
+            error: backupErr.message,
+            durationMs: pDurBackup,
+          });
+
+          // Both providers failed — notify coordinator and rethrow
+          const durationMs = Date.now() - startMs;
+          if (workflowId && orchestratorRunId && waitpointTokenId) {
+            await notifyCoordinator({
+              workflowId,
+              runId,
+              nodeId: nodeRunId,
+              status: "failed",
+              error: `All providers failed: ${err.message} -> ${backupErr.message}`,
+              durationMs,
+              orchestratorRunId,
+              waitpointTokenId,
+              providerUsed: null,
+              providerAttempts: attempts,
+              logs,
+              creditCost: 0,
+            });
+          }
+          throw new Error(`All providers failed: ${err.message} -> ${backupErr.message}`);
+        }
+      }
+
+      const durationMs = Date.now() - startMs;
+      const creditCost = klingV3Definition.credits.base;
+
+      // Notify the coordinator task if coordination fields are provided
+      if (workflowId && orchestratorRunId && waitpointTokenId) {
+        await notifyCoordinator({
+          workflowId,
+          runId,
+          nodeId: nodeRunId,
+          status: "success",
+          output: { outputVideo: outputUrl }, // Matches klingV3OutputSchema (expects { outputVideo: string })
+          durationMs,
+          orchestratorRunId,
+          waitpointTokenId,
+          providerUsed: successfulProvider,
+          providerAttempts: attempts,
+          logs,
+          creditCost,
+        });
+      }
+
+      return { outputVideo: outputUrl, runId, nodeRunId };
+
+    } catch (fatalErr: any) {
+      // Top-level guard: prevents hung 1-hour waitpoint tokens on unexpected crashes
+      const durationMs = Date.now() - startMs;
+      const fatalMsg = fatalErr instanceof Error ? fatalErr.message : String(fatalErr);
+      console.error(`[KlingV3Task] 💥 Fatal unhandled error: ${fatalMsg}`);
+      if (workflowId && orchestratorRunId && waitpointTokenId) {
+        try {
           await notifyCoordinator({
             workflowId,
             runId,
             nodeId: nodeRunId,
             status: "failed",
-            error: `All providers failed: ${err.message} -> ${backupErr.message}`,
+            error: `Fatal error: ${fatalMsg}`,
             durationMs,
             orchestratorRunId,
             waitpointTokenId,
             providerUsed: null,
             providerAttempts: attempts,
-            logs,
+            logs: logs + `\n[FATAL] ${fatalMsg}`,
             creditCost: 0,
           });
+        } catch (notifyErr) {
+          console.error(`[KlingV3Task] Failed to notify coordinator after fatal error:`, notifyErr);
         }
-        throw new Error(`All providers failed: ${err.message} -> ${backupErr.message}`);
       }
+      throw fatalErr;
     }
-
-    const durationMs = Date.now() - startMs;
-    const creditCost = klingV3Definition.credits.base;
-
-    // Notify the coordinator task if coordination fields are provided
-    if (workflowId && orchestratorRunId && waitpointTokenId) {
-      await notifyCoordinator({
-        workflowId,
-        runId,
-        nodeId: nodeRunId,
-        status: "success",
-        output: { outputVideo: outputUrl }, // Matches klingV3OutputSchema (expects { outputVideo: string })
-        durationMs,
-        orchestratorRunId,
-        waitpointTokenId,
-        providerUsed: successfulProvider,
-        providerAttempts: attempts,
-        logs,
-        creditCost,
-      });
-    }
-
-    return { outputVideo: outputUrl, runId, nodeRunId };
   },
 });

@@ -9,6 +9,7 @@ interface SimulateCallbackPayload {
 
 export const simulateCallbackTask = task({
   id: "simulate-callback",
+  maxDuration: 120, // 2 minutes max — covers the 12s delay + buffer
   run: async (payload: SimulateCallbackPayload) => {
     const { tokenId, nodeType, prompt, delaySeconds = 10 } = payload;
 

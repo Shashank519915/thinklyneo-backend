@@ -1,5 +1,11 @@
 /**
  * @fileoverview Trigger.dev `extract-audio` task implementing real FFmpeg audio extraction.
+ *
+ * Resilience:
+ *  - try/finally ensures temp files are always cleaned up even if FFmpeg fails mid-process.
+ *  - Two-provider fallback: main-ffmpeg → backup-stub (canned MP3 URL)
+ *  - Top-level try/catch prevents 1-hour waitpoint token hangs on unexpected crashes.
+ *  - maxDuration: 300s (5 min for large video downloads + FFmpeg processing + Transloadit upload)
  */
 
 import { task, wait } from "@trigger.dev/sdk/v3";
@@ -140,8 +146,18 @@ async function downloadFile(url: string, destPath: string): Promise<void> {
   fs.writeFileSync(destPath, buffer);
 }
 
+/** Silently removes a temp file if it exists. */
+function cleanupFile(filePath: string): void {
+  try {
+    if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+  } catch {
+    // ignore cleanup errors
+  }
+}
+
 export const extractAudioTask = task({
   id: "extract-audio",
+  maxDuration: 300, // 5 minutes: download + FFmpeg + Transloadit upload
   run: async (payload: ExtractAudioPayload) => {
     const {
       videoUrl,
@@ -160,126 +176,153 @@ export const extractAudioTask = task({
     let outputUrl: string | null = null;
     let logs = "";
 
-    const pStartMain = Date.now();
     try {
-      logs += `[main-ffmpeg] Starting audio extraction...\n`;
-      
+      const pStartMain = Date.now();
       const tmpDir = os.tmpdir();
       const videoPath = path.join(tmpDir, `video_source_${nodeRunId}.mp4`);
       const outputPath = path.join(tmpDir, `extracted_${nodeRunId}.mp3`);
 
-      // Download input
-      logs += `[main-ffmpeg] Downloading video source...\n`;
-      await downloadFile(videoUrl, videoPath);
-
-      // Run FFmpeg to extract audio (-vn -acodec libmp3lame)
-      logs += `[main-ffmpeg] Running ffmpeg to extract audio track...\n`;
-      const Ffmpeg = (await import("fluent-ffmpeg")).default;
-      await new Promise<void>((resolve, reject) => {
-        Ffmpeg(videoPath)
-          .outputOptions(["-vn", "-acodec libmp3lame"])
-          .output(outputPath)
-          .on("end", () => resolve())
-          .on("error", (err) => reject(err))
-          .run();
-      });
-
-      logs += `[main-ffmpeg] Extraction complete, reading output file...\n`;
-      const outputBuffer = fs.readFileSync(outputPath);
-
-      // Clean up temp files
-      fs.unlink(videoPath, () => {});
-      fs.unlink(outputPath, () => {});
-
-      // Upload
-      logs += `[main-ffmpeg] Uploading extracted audio to storage...\n`;
-      outputUrl = await uploadBufferToTransloadit(outputBuffer, `extracted_${nodeRunId}.mp3`);
-
-      successfulProvider = "main-ffmpeg";
-      attempts.push({
-        providerId: "main-ffmpeg",
-        status: "success",
-        durationMs: Date.now() - pStartMain,
-      });
-      logs += `[main-ffmpeg] Success: Extracted audio uploaded to ${outputUrl}\n`;
-    } catch (err: any) {
-      const pDurMain = Date.now() - pStartMain;
-      console.warn(`[ExtractAudioTask] ⚠️ Provider main-ffmpeg failed in ${pDurMain}ms:`, err.message);
-      logs += `[main-ffmpeg] Failure after ${pDurMain}ms: ${err.message}\n`;
-      attempts.push({
-        providerId: "main-ffmpeg",
-        status: "failed",
-        error: err.message,
-        durationMs: pDurMain,
-      });
-
-      // ── Provider 2: backup-stub (Simulated backup stub) ──────────────────
-      const pStartBackup = Date.now();
       try {
-        logs += `[backup-stub] Attempting fallback stub...\n`;
-        await wait.for({ seconds: 2 });
-        
-        outputUrl = "https://images.transloadit.com/examples/sample.mp3"; // standard transloadit example audio
-        successfulProvider = "backup-stub";
+        logs += `[main-ffmpeg] Starting audio extraction...\n`;
+
+        // Download input
+        logs += `[main-ffmpeg] Downloading video source...\n`;
+        await downloadFile(videoUrl, videoPath);
+
+        // Run FFmpeg to extract audio (-vn -acodec libmp3lame)
+        logs += `[main-ffmpeg] Running ffmpeg to extract audio track...\n`;
+        const Ffmpeg = (await import("fluent-ffmpeg")).default;
+        await new Promise<void>((resolve, reject) => {
+          Ffmpeg(videoPath)
+            .outputOptions(["-vn", "-acodec libmp3lame"])
+            .output(outputPath)
+            .on("end", () => resolve())
+            .on("error", (err) => reject(err))
+            .run();
+        });
+
+        logs += `[main-ffmpeg] Extraction complete, reading output file...\n`;
+        const outputBuffer = fs.readFileSync(outputPath);
+
+        // Upload
+        logs += `[main-ffmpeg] Uploading extracted audio to storage...\n`;
+        outputUrl = await uploadBufferToTransloadit(outputBuffer, `extracted_${nodeRunId}.mp3`);
+
+        successfulProvider = "main-ffmpeg";
         attempts.push({
-          providerId: "backup-stub",
+          providerId: "main-ffmpeg",
           status: "success",
-          durationMs: Date.now() - pStartBackup,
+          durationMs: Date.now() - pStartMain,
         });
-        logs += `[backup-stub] Success: Fallback generated canned audio URL: ${outputUrl}\n`;
-      } catch (backupErr: any) {
-        const pDurBackup = Date.now() - pStartBackup;
-        logs += `[backup-stub] Failure after ${pDurBackup}ms: ${backupErr.message}\n`;
+        logs += `[main-ffmpeg] Success: Extracted audio uploaded to ${outputUrl}\n`;
+      } catch (err: any) {
+        const pDurMain = Date.now() - pStartMain;
+        console.warn(`[ExtractAudioTask] ⚠️ Provider main-ffmpeg failed in ${pDurMain}ms:`, err.message);
+        logs += `[main-ffmpeg] Failure after ${pDurMain}ms: ${err.message}\n`;
         attempts.push({
-          providerId: "backup-stub",
+          providerId: "main-ffmpeg",
           status: "failed",
-          error: backupErr.message,
-          durationMs: pDurBackup,
+          error: err.message,
+          durationMs: pDurMain,
         });
-        
-        // Both failed
-        const durationMs = Date.now() - startMs;
-        if (workflowId && orchestratorRunId && waitpointTokenId) {
+
+        // ── Provider 2: backup-stub ───────────────────────────────────────────
+        const pStartBackup = Date.now();
+        try {
+          logs += `[backup-stub] Attempting fallback stub...\n`;
+          await wait.for({ seconds: 2 });
+
+          outputUrl = "https://images.transloadit.com/examples/sample.mp3";
+          successfulProvider = "backup-stub";
+          attempts.push({
+            providerId: "backup-stub",
+            status: "success",
+            durationMs: Date.now() - pStartBackup,
+          });
+          logs += `[backup-stub] Success: Fallback generated canned audio URL: ${outputUrl}\n`;
+        } catch (backupErr: any) {
+          const pDurBackup = Date.now() - pStartBackup;
+          logs += `[backup-stub] Failure after ${pDurBackup}ms: ${backupErr.message}\n`;
+          attempts.push({
+            providerId: "backup-stub",
+            status: "failed",
+            error: backupErr.message,
+            durationMs: pDurBackup,
+          });
+
+          const durationMs = Date.now() - startMs;
+          if (workflowId && orchestratorRunId && waitpointTokenId) {
+            await notifyCoordinator({
+              workflowId,
+              runId,
+              nodeId: nodeRunId,
+              status: "failed",
+              error: `All providers failed: ${err.message} -> ${backupErr.message}`,
+              durationMs,
+              orchestratorRunId,
+              waitpointTokenId,
+              providerUsed: null,
+              providerAttempts: attempts,
+              logs,
+              creditCost: 0,
+            });
+          }
+          throw new Error(`All providers failed: ${err.message} -> ${backupErr.message}`);
+        }
+      } finally {
+        // Always clean up temp files regardless of success or failure
+        cleanupFile(videoPath);
+        cleanupFile(outputPath);
+      }
+
+      const durationMs = Date.now() - startMs;
+      const creditCost = extractAudioDefinition.credits.base;
+
+      if (workflowId && orchestratorRunId && waitpointTokenId) {
+        await notifyCoordinator({
+          workflowId,
+          runId,
+          nodeId: nodeRunId,
+          status: "success",
+          output: { outputAudio: outputUrl }, // Matches extractAudioOutputSchema
+          durationMs,
+          orchestratorRunId,
+          waitpointTokenId,
+          providerUsed: successfulProvider,
+          providerAttempts: attempts,
+          logs,
+          creditCost,
+        });
+      }
+
+      return { outputAudio: outputUrl, runId, nodeRunId };
+
+    } catch (fatalErr: any) {
+      // Top-level guard: prevents hung 1-hour waitpoint tokens on unexpected crashes
+      const durationMs = Date.now() - startMs;
+      const fatalMsg = fatalErr instanceof Error ? fatalErr.message : String(fatalErr);
+      console.error(`[ExtractAudioTask] 💥 Fatal unhandled error: ${fatalMsg}`);
+      if (workflowId && orchestratorRunId && waitpointTokenId) {
+        try {
           await notifyCoordinator({
             workflowId,
             runId,
             nodeId: nodeRunId,
             status: "failed",
-            error: `All providers failed: ${err.message} -> ${backupErr.message}`,
+            error: `Fatal error: ${fatalMsg}`,
             durationMs,
             orchestratorRunId,
             waitpointTokenId,
             providerUsed: null,
             providerAttempts: attempts,
-            logs,
+            logs: logs + `\n[FATAL] ${fatalMsg}`,
             creditCost: 0,
           });
+        } catch (notifyErr) {
+          console.error(`[ExtractAudioTask] Failed to notify coordinator after fatal error:`, notifyErr);
         }
-        throw new Error(`All providers failed: ${err.message} -> ${backupErr.message}`);
       }
+      throw fatalErr;
     }
-
-    const durationMs = Date.now() - startMs;
-    const creditCost = extractAudioDefinition.credits.base;
-
-    // Notify the coordinator task if coordination fields are provided
-    if (workflowId && orchestratorRunId && waitpointTokenId) {
-      await notifyCoordinator({
-        workflowId,
-        runId,
-        nodeId: nodeRunId,
-        status: "success",
-        output: { outputAudio: outputUrl }, // Matches extractAudioOutputSchema (expects { outputAudio: string })
-        durationMs,
-        orchestratorRunId,
-        waitpointTokenId,
-        providerUsed: successfulProvider,
-        providerAttempts: attempts,
-        logs,
-        creditCost,
-      });
-    }
-
-    return { outputAudio: outputUrl, runId, nodeRunId };
   },
 });

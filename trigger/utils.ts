@@ -1,5 +1,23 @@
-import { tasks } from "@trigger.dev/sdk/v3";
+import { tasks, wait } from "@trigger.dev/sdk/v3";
 import { prisma } from "../lib/prisma";
+
+/**
+ * Races an async operation against a Trigger.dev durable wait deadline.
+ * Prefer this over `setTimeout` — native timers are cleared across checkpoints.
+ */
+export async function callWithDurableTimeout<T>(
+  seconds: number,
+  fn: (signal: AbortSignal) => Promise<T>
+): Promise<T> {
+  const controller = new AbortController();
+  const work = fn(controller.signal);
+  const timeout = (async () => {
+    await wait.for({ seconds });
+    controller.abort();
+    throw new Error(`Request timed out after ${seconds} seconds`);
+  })();
+  return Promise.race([work, timeout]);
+}
 import { Prisma } from "@prisma/client";
 import { triggerOutboundWebhook } from "../lib/webhooks";
 

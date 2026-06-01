@@ -1,5 +1,11 @@
 /**
  * @fileoverview Trigger.dev `merge-av` task implementing real FFmpeg video and audio combining.
+ *
+ * Resilience:
+ *  - try/finally ensures temp files are always cleaned up even if FFmpeg fails mid-process.
+ *  - Two-provider fallback: main-ffmpeg → backup-stub (canned video URL)
+ *  - Top-level try/catch prevents 1-hour waitpoint token hangs on unexpected crashes.
+ *  - maxDuration: 300s (5 min for downloads + FFmpeg + Transloadit upload)
  */
 
 import { task, wait } from "@trigger.dev/sdk/v3";
@@ -141,8 +147,18 @@ async function downloadFile(url: string, destPath: string): Promise<void> {
   fs.writeFileSync(destPath, buffer);
 }
 
+/** Silently removes a temp file if it exists. */
+function cleanupFile(filePath: string): void {
+  try {
+    if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+  } catch {
+    // ignore cleanup errors
+  }
+}
+
 export const mergeAVTask = task({
   id: "merge-av",
+  maxDuration: 300, // 5 minutes: video + audio download + FFmpeg merge + Transloadit upload
   run: async (payload: MergeAVPayload) => {
     const {
       videoUrl,
@@ -162,137 +178,164 @@ export const mergeAVTask = task({
     let outputUrl: string | null = null;
     let logs = "";
 
-    const pStartMain = Date.now();
     try {
-      logs += `[main-ffmpeg] Starting video and audio combination...\n`;
-      
+      const pStartMain = Date.now();
       const tmpDir = os.tmpdir();
       const videoPath = path.join(tmpDir, `video_${nodeRunId}.mp4`);
       const audioPath = path.join(tmpDir, `audio_${nodeRunId}.mp3`);
       const outputPath = path.join(tmpDir, `combined_${nodeRunId}.mp4`);
 
-      // Download inputs
-      logs += `[main-ffmpeg] Downloading video source...\n`;
-      await downloadFile(videoUrl, videoPath);
-      logs += `[main-ffmpeg] Downloading audio source...\n`;
-      await downloadFile(audioUrl, audioPath);
-
-      // Run FFmpeg to map input video's video stream and input audio's audio stream
-      logs += `[main-ffmpeg] Running ffmpeg to merge video and audio...\n`;
-      const Ffmpeg = (await import("fluent-ffmpeg")).default;
-      await new Promise<void>((resolve, reject) => {
-        Ffmpeg()
-          .input(videoPath)
-          .input(audioPath)
-          .outputOptions([
-            "-c:v copy",
-            "-c:a aac",
-            "-map 0:v:0",
-            "-map 1:a:0",
-          ])
-          .output(outputPath)
-          .on("end", () => resolve())
-          .on("error", (err) => reject(err))
-          .run();
-      });
-
-      logs += `[main-ffmpeg] Combination complete, reading output file...\n`;
-      const outputBuffer = fs.readFileSync(outputPath);
-
-      // Clean up temp files
-      fs.unlink(videoPath, () => {});
-      fs.unlink(audioPath, () => {});
-      fs.unlink(outputPath, () => {});
-
-      // Upload
-      logs += `[main-ffmpeg] Uploading combined video to storage...\n`;
-      outputUrl = await uploadBufferToTransloadit(outputBuffer, `combined_${nodeRunId}.mp4`);
-
-      successfulProvider = "main-ffmpeg";
-      attempts.push({
-        providerId: "main-ffmpeg",
-        status: "success",
-        durationMs: Date.now() - pStartMain,
-      });
-      logs += `[main-ffmpeg] Success: Combined video uploaded to ${outputUrl}\n`;
-    } catch (err: any) {
-      const pDurMain = Date.now() - pStartMain;
-      console.warn(`[MergeAVTask] ⚠️ Provider main-ffmpeg failed in ${pDurMain}ms:`, err.message);
-      logs += `[main-ffmpeg] Failure after ${pDurMain}ms: ${err.message}\n`;
-      attempts.push({
-        providerId: "main-ffmpeg",
-        status: "failed",
-        error: err.message,
-        durationMs: pDurMain,
-      });
-
-      // ── Provider 2: backup-stub (Simulated backup stub) ──────────────────
-      const pStartBackup = Date.now();
       try {
-        logs += `[backup-stub] Attempting fallback stub...\n`;
-        await wait.for({ seconds: 2 });
-        
-        outputUrl = "https://images.transloadit.com/examples/vertical.mp4";
-        successfulProvider = "backup-stub";
+        logs += `[main-ffmpeg] Starting video and audio combination...\n`;
+
+        // Download inputs
+        logs += `[main-ffmpeg] Downloading video source...\n`;
+        await downloadFile(videoUrl, videoPath);
+        logs += `[main-ffmpeg] Downloading audio source...\n`;
+        await downloadFile(audioUrl, audioPath);
+
+        // Run FFmpeg: -c:v copy, -c:a aac, map video from input 0, audio from input 1
+        logs += `[main-ffmpeg] Running ffmpeg to merge video and audio...\n`;
+        const Ffmpeg = (await import("fluent-ffmpeg")).default;
+        await new Promise<void>((resolve, reject) => {
+          Ffmpeg()
+            .input(videoPath)
+            .input(audioPath)
+            .outputOptions([
+              "-c:v copy",
+              "-c:a aac",
+              "-map 0:v:0",
+              "-map 1:a:0",
+            ])
+            .output(outputPath)
+            .on("end", () => resolve())
+            .on("error", (err) => reject(err))
+            .run();
+        });
+
+        logs += `[main-ffmpeg] Combination complete, reading output file...\n`;
+        const outputBuffer = fs.readFileSync(outputPath);
+
+        // Upload
+        logs += `[main-ffmpeg] Uploading combined video to storage...\n`;
+        outputUrl = await uploadBufferToTransloadit(outputBuffer, `combined_${nodeRunId}.mp4`);
+
+        successfulProvider = "main-ffmpeg";
         attempts.push({
-          providerId: "backup-stub",
+          providerId: "main-ffmpeg",
           status: "success",
-          durationMs: Date.now() - pStartBackup,
+          durationMs: Date.now() - pStartMain,
         });
-        logs += `[backup-stub] Success: Fallback generated canned video URL: ${outputUrl}\n`;
-      } catch (backupErr: any) {
-        const pDurBackup = Date.now() - pStartBackup;
-        logs += `[backup-stub] Failure after ${pDurBackup}ms: ${backupErr.message}\n`;
+        logs += `[main-ffmpeg] Success: Combined video uploaded to ${outputUrl}\n`;
+      } catch (err: any) {
+        const pDurMain = Date.now() - pStartMain;
+        console.warn(`[MergeAVTask] ⚠️ Provider main-ffmpeg failed in ${pDurMain}ms:`, err.message);
+        logs += `[main-ffmpeg] Failure after ${pDurMain}ms: ${err.message}\n`;
         attempts.push({
-          providerId: "backup-stub",
+          providerId: "main-ffmpeg",
           status: "failed",
-          error: backupErr.message,
-          durationMs: pDurBackup,
+          error: err.message,
+          durationMs: pDurMain,
         });
-        
-        // Both failed
-        const durationMs = Date.now() - startMs;
-        if (workflowId && orchestratorRunId && waitpointTokenId) {
+
+        // ── Provider 2: backup-stub ───────────────────────────────────────────
+        const pStartBackup = Date.now();
+        try {
+          logs += `[backup-stub] Attempting fallback stub...\n`;
+          await wait.for({ seconds: 2 });
+
+          outputUrl = "https://images.transloadit.com/examples/vertical.mp4";
+          successfulProvider = "backup-stub";
+          attempts.push({
+            providerId: "backup-stub",
+            status: "success",
+            durationMs: Date.now() - pStartBackup,
+          });
+          logs += `[backup-stub] Success: Fallback generated canned video URL: ${outputUrl}\n`;
+        } catch (backupErr: any) {
+          const pDurBackup = Date.now() - pStartBackup;
+          logs += `[backup-stub] Failure after ${pDurBackup}ms: ${backupErr.message}\n`;
+          attempts.push({
+            providerId: "backup-stub",
+            status: "failed",
+            error: backupErr.message,
+            durationMs: pDurBackup,
+          });
+
+          const durationMs = Date.now() - startMs;
+          if (workflowId && orchestratorRunId && waitpointTokenId) {
+            await notifyCoordinator({
+              workflowId,
+              runId,
+              nodeId: nodeRunId,
+              status: "failed",
+              error: `All providers failed: ${err.message} -> ${backupErr.message}`,
+              durationMs,
+              orchestratorRunId,
+              waitpointTokenId,
+              providerUsed: null,
+              providerAttempts: attempts,
+              logs,
+              creditCost: 0,
+            });
+          }
+          throw new Error(`All providers failed: ${err.message} -> ${backupErr.message}`);
+        }
+      } finally {
+        // Always clean up temp files regardless of success or failure
+        cleanupFile(videoPath);
+        cleanupFile(audioPath);
+        cleanupFile(outputPath);
+      }
+
+      const durationMs = Date.now() - startMs;
+      const creditCost = mergeAVDefinition.credits.base;
+
+      if (workflowId && orchestratorRunId && waitpointTokenId) {
+        await notifyCoordinator({
+          workflowId,
+          runId,
+          nodeId: nodeRunId,
+          status: "success",
+          output: { outputVideo: outputUrl }, // Matches mergeAVOutputSchema
+          durationMs,
+          orchestratorRunId,
+          waitpointTokenId,
+          providerUsed: successfulProvider,
+          providerAttempts: attempts,
+          logs,
+          creditCost,
+        });
+      }
+
+      return { outputVideo: outputUrl, runId, nodeRunId };
+
+    } catch (fatalErr: any) {
+      // Top-level guard: prevents hung 1-hour waitpoint tokens on unexpected crashes
+      const durationMs = Date.now() - startMs;
+      const fatalMsg = fatalErr instanceof Error ? fatalErr.message : String(fatalErr);
+      console.error(`[MergeAVTask] 💥 Fatal unhandled error: ${fatalMsg}`);
+      if (workflowId && orchestratorRunId && waitpointTokenId) {
+        try {
           await notifyCoordinator({
             workflowId,
             runId,
             nodeId: nodeRunId,
             status: "failed",
-            error: `All providers failed: ${err.message} -> ${backupErr.message}`,
+            error: `Fatal error: ${fatalMsg}`,
             durationMs,
             orchestratorRunId,
             waitpointTokenId,
             providerUsed: null,
             providerAttempts: attempts,
-            logs,
+            logs: logs + `\n[FATAL] ${fatalMsg}`,
             creditCost: 0,
           });
+        } catch (notifyErr) {
+          console.error(`[MergeAVTask] Failed to notify coordinator after fatal error:`, notifyErr);
         }
-        throw new Error(`All providers failed: ${err.message} -> ${backupErr.message}`);
       }
+      throw fatalErr;
     }
-
-    const durationMs = Date.now() - startMs;
-    const creditCost = mergeAVDefinition.credits.base;
-
-    // Notify the coordinator task if coordination fields are provided
-    if (workflowId && orchestratorRunId && waitpointTokenId) {
-      await notifyCoordinator({
-        workflowId,
-        runId,
-        nodeId: nodeRunId,
-        status: "success",
-        output: { outputVideo: outputUrl }, // Matches mergeAVOutputSchema (expects { outputVideo: string })
-        durationMs,
-        orchestratorRunId,
-        waitpointTokenId,
-        providerUsed: successfulProvider,
-        providerAttempts: attempts,
-        logs,
-        creditCost,
-      });
-    }
-
-    return { outputVideo: outputUrl, runId, nodeRunId };
   },
 });
