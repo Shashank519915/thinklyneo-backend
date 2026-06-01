@@ -45,7 +45,7 @@ export const cropImageDefinition: NodeDefinition = {
       group: "primary",
       handle: {
         type: "text",
-        color: "#10b981",
+        color: "#ec4899",
       },
     },
     {
@@ -59,7 +59,7 @@ export const cropImageDefinition: NodeDefinition = {
       group: "primary",
       handle: {
         type: "text",
-        color: "#10b981",
+        color: "#ec4899",
       },
     },
     {
@@ -73,7 +73,7 @@ export const cropImageDefinition: NodeDefinition = {
       group: "primary",
       handle: {
         type: "text",
-        color: "#10b981",
+        color: "#ec4899",
       },
     },
     {
@@ -87,7 +87,7 @@ export const cropImageDefinition: NodeDefinition = {
       group: "primary",
       handle: {
         type: "text",
-        color: "#10b981",
+        color: "#ec4899",
       },
     },
   ],

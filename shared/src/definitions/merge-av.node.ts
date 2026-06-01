@@ -39,7 +39,7 @@ export const mergeAVDefinition: NodeDefinition = {
       group: "primary",
       handle: {
         type: "audio",
-        color: "#ec4899",
+        color: "#06b6d4",
       },
     },
   ],

@@ -76,7 +76,7 @@ export const openrouterLlmDefinition: NodeDefinition = {
       group: "primary",
       handle: {
         type: "audio",
-        color: "#ec4899",
+        color: "#06b6d4",
       },
     },
     {
@@ -86,7 +86,7 @@ export const openrouterLlmDefinition: NodeDefinition = {
       group: "primary",
       handle: {
         type: "file",
-        color: "#6B7280",
+        color: "#a855f7",
       },
     },
     {

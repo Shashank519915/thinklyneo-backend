@@ -38,7 +38,7 @@ export const extractAudioDefinition: NodeDefinition = {
       type: "audio",
       handle: {
         type: "audio",
-        color: "#ec4899",
+        color: "#06b6d4",
       },
     },
   ],
