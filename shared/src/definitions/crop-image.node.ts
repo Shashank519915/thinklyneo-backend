@@ -104,4 +104,17 @@ export const cropImageDefinition: NodeDefinition = {
   ],
   inputSchema: cropImageInputSchema,
   outputSchema: cropImageOutputSchema,
+  retryPerProvider: 1,
+  providers: [
+    {
+      id: "main-ffmpeg",
+      kind: "ffmpeg",
+    },
+    {
+      id: "backup-stub",
+      kind: "stub",
+      stubDelaySeconds: 2,
+      stubUrl: "https://images.transloadit.com/examples/landscape.jpg",
+    },
+  ],
 };

@@ -132,4 +132,20 @@ export const geminiDefinition: NodeDefinition = {
   ],
   inputSchema: geminiInputSchema,
   outputSchema: geminiOutputSchema,
+  defaultTimeoutSeconds: 15,
+  retryPerProvider: 1,
+  providers: [
+    {
+      id: "main-openrouter",
+      kind: "openrouter",
+      timeoutSeconds: 15,
+    },
+    {
+      id: "backup-stub",
+      kind: "stub",
+      stubDelaySeconds: 2,
+      stubTextTemplate:
+        '[Backup Provider Stub Response]\nThis is a fallback response because the primary OpenRouter provider failed or timed out.\n\nPrompt: "{{prompt}}"',
+    },
+  ],
 };

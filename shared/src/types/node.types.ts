@@ -1,4 +1,5 @@
 import { z } from "zod";
+import type { NodeProviderConfig } from "./provider.types";
 
 export interface NodeParameter {
   key: string;
@@ -41,6 +42,12 @@ export interface NodeDefinition {
   inputs: NodeParameter[];
   outputs: NodeOutputDefinition[];
   limits?: Record<string, { maxCount?: number; maxSizeMb?: number; maxLength?: number }>;
+  /** Ordered provider chain - first success wins; transparent to orchestrator */
+  providers: NodeProviderConfig[];
+  /** Default timeout (seconds) when a provider entry omits timeoutSeconds */
+  defaultTimeoutSeconds?: number;
+  /** Default retries per provider before advancing to the next in the chain */
+  retryPerProvider?: number;
   inputSchema: z.ZodObject<any>;
   outputSchema: z.ZodObject<any>;
 }

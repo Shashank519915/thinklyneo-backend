@@ -7,6 +7,7 @@ export const dummySchema = z.object({
 export type DummyType = z.infer<typeof dummySchema>;
 
 // Export shared types
+export * from "./types/provider.types";
 export * from "./types/node.types";
 
 // Export node definitions & schemas

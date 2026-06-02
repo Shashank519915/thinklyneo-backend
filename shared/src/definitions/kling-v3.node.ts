@@ -80,4 +80,20 @@ export const klingV3Definition: NodeDefinition = {
   ],
   inputSchema: klingV3InputSchema,
   outputSchema: klingV3OutputSchema,
+  retryPerProvider: 1,
+  providers: [
+    {
+      id: "kling-webhook",
+      kind: "webhook-sim",
+      nodeType: "klingV3",
+      delaySeconds: 12,
+      tokenTimeout: "5m",
+    },
+    {
+      id: "backup-stub",
+      kind: "stub",
+      stubDelaySeconds: 2,
+      stubUrl: "https://images.transloadit.com/examples/vertical.mp4",
+    },
+  ],
 };

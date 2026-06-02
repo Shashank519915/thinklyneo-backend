@@ -132,4 +132,21 @@ export const openrouterLlmDefinition: NodeDefinition = {
   ],
   inputSchema: openrouterLlmInputSchema,
   outputSchema: openrouterLlmOutputSchema,
+  defaultTimeoutSeconds: 15,
+  retryPerProvider: 1,
+  providers: [
+    {
+      id: "main-openrouter",
+      kind: "openrouter",
+      timeoutSeconds: 15,
+      model: "google/gemini-2.5-flash",
+    },
+    {
+      id: "backup-stub",
+      kind: "stub",
+      stubDelaySeconds: 2,
+      stubTextTemplate:
+        '[Backup Provider Stub Response]\nThis is a fallback response because the primary OpenRouter free model failed or timed out.\n\nPrompt: "{{prompt}}"',
+    },
+  ],
 };

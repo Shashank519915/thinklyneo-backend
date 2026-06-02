@@ -142,4 +142,20 @@ export const gptImage2Definition: NodeDefinition = {
   ],
   inputSchema: gptImage2InputSchema,
   outputSchema: gptImage2OutputSchema,
+  retryPerProvider: 1,
+  providers: [
+    {
+      id: "gpt-image-webhook",
+      kind: "webhook-sim",
+      nodeType: "gptImage2",
+      delaySeconds: 10,
+      tokenTimeout: "5m",
+    },
+    {
+      id: "backup-stub",
+      kind: "stub",
+      stubDelaySeconds: 2,
+      stubUrl: "https://images.transloadit.com/examples/landscape.jpg",
+    },
+  ],
 };
