@@ -114,6 +114,77 @@ export async function placeCreditHold(
 /**
  * Reconciles the workflow run balance: releases the estimated hold and deducts the actual cost.
  */
+/** Absolute microcredits placed on hold for this run (0 if no hold). */
+export async function getRunHoldAmount(runId: string): Promise<number> {
+  const holdLedger = await prisma.creditLedger.findFirst({
+    where: { runId, type: "hold" },
+  });
+  return holdLedger ? Math.abs(holdLedger.amount) : 0;
+}
+
+/** Sum of `creditCost` on successful node runs for this workflow run. */
+export async function getRunActualCostMicrocredits(runId: string): Promise<number> {
+  const nodeRuns = await prisma.nodeRun.findMany({
+    where: { runId, status: "success" },
+    select: { creditCost: true },
+  });
+  return nodeRuns.reduce((sum, r) => sum + (r.creditCost ?? 0), 0);
+}
+
+export type LayerCreditCheckResult =
+  | {
+      ok: true;
+      holdAmount: number;
+      actualCost: number;
+      remainingHold: number;
+      layerCost: number;
+    }
+  | {
+      ok: false;
+      holdAmount: number;
+      actualCost: number;
+      remainingHold: number;
+      layerCost: number;
+      message: string;
+    };
+
+/**
+ * Before dispatching the next ready layer, ensure hold covers spend-so-far plus this layer's estimate.
+ * No-op when no hold was placed (holdAmount === 0).
+ */
+export async function checkNextLayerWithinHold(
+  runId: string,
+  readyNodes: { type: string }[]
+): Promise<LayerCreditCheckResult> {
+  const holdAmount = await getRunHoldAmount(runId);
+  const actualCost = await getRunActualCostMicrocredits(runId);
+  const layerCost = estimateWorkflowCost(readyNodes);
+  const remainingHold = holdAmount - actualCost;
+
+  if (holdAmount <= 0) {
+    return { ok: true, holdAmount, actualCost, remainingHold, layerCost };
+  }
+
+  if (readyNodes.length === 0) {
+    return { ok: true, holdAmount, actualCost, remainingHold, layerCost: 0 };
+  }
+
+  if (layerCost > remainingHold) {
+    const needM = (layerCost / 1_000_000).toFixed(2);
+    const remainM = (Math.max(0, remainingHold) / 1_000_000).toFixed(2);
+    return {
+      ok: false,
+      holdAmount,
+      actualCost,
+      remainingHold,
+      layerCost,
+      message: `Run stopped: next layer needs ~${needM} credits but only ~${remainM} remain within the hold (spent ~${(actualCost / 1_000_000).toFixed(2)} of ~${(holdAmount / 1_000_000).toFixed(2)} held).`,
+    };
+  }
+
+  return { ok: true, holdAmount, actualCost, remainingHold, layerCost };
+}
+
 export async function reconcileWorkflowCredits(
   userId: string,
   runId: string,

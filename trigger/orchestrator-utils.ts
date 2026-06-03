@@ -18,6 +18,65 @@ export interface SerializedEdge {
   targetHandle?: string | null;
 }
 
+/** Mirrors orchestrator metadata node state (subset used for scheduling). */
+export type OrchestratorNodeStatus =
+  | "pending"
+  | "running"
+  | "completed"
+  | "failed"
+  | "skipped";
+
+export interface OrchestratorNodeState {
+  status: OrchestratorNodeStatus;
+  output?: unknown;
+  error?: string;
+}
+
+/**
+ * Nodes that are pending and whose upstream dependencies are all terminal (ready layer).
+ */
+export function collectReadyPendingNodes(
+  sortedNodes: SerializedNode[],
+  deps: Map<string, Set<string>>,
+  nodeStates: Record<string, OrchestratorNodeState>
+): SerializedNode[] {
+  const ready: SerializedNode[] = [];
+
+  for (const node of sortedNodes) {
+    const currentState = nodeStates[node.id];
+    if (!currentState || currentState.status !== "pending") {
+      continue;
+    }
+
+    const upstreamDeps = deps.get(node.id) ?? new Set();
+    let allParentsFinished = true;
+    let hasFailedParent = false;
+
+    for (const depId of upstreamDeps) {
+      const depState = nodeStates[depId];
+      if (!depState) {
+        allParentsFinished = false;
+        break;
+      }
+      if (depState.status === "pending" || depState.status === "running") {
+        allParentsFinished = false;
+        break;
+      }
+      if (depState.status === "failed" || depState.status === "skipped") {
+        hasFailedParent = true;
+      }
+    }
+
+    if (!allParentsFinished || hasFailedParent) {
+      continue;
+    }
+
+    ready.push(node);
+  }
+
+  return ready;
+}
+
 /**
  * Kahn-style topological sort for deterministic execution order.
  */

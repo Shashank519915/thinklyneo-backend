@@ -7,8 +7,10 @@ import {
   topologicalSort,
   getNodeWithDeps,
   resolveInputsForNode,
+  collectReadyPendingNodes,
   type SerializedNode,
   type SerializedEdge,
+  type OrchestratorNodeState,
 } from "../trigger/orchestrator-utils";
 
 function node(id: string, type: string, data: Record<string, unknown> = {}): SerializedNode {
@@ -111,5 +113,44 @@ describe("resolveInputsForNode", () => {
     const inputs = resolveInputsForNode(crop, [], new Map(), {});
     expect(inputs.x).toBe(10);
     expect(inputs.y).toBe(20);
+  });
+});
+
+describe("collectReadyPendingNodes", () => {
+  it("returns pending nodes whose parents are all terminal", () => {
+    const nodes = [
+      node("a", "requestInputs"),
+      node("b", "openRouter"),
+      node("c", "gptImage2"),
+    ];
+    const edges = [edge("a", "b"), edge("b", "c")];
+    const sorted = topologicalSort(nodes, edges);
+    const deps = new Map<string, Set<string>>([
+      ["a", new Set()],
+      ["b", new Set(["a"])],
+      ["c", new Set(["b"])],
+    ]);
+    const states: Record<string, OrchestratorNodeState> = {
+      a: { status: "completed" },
+      b: { status: "pending" },
+      c: { status: "pending" },
+    };
+    const ready = collectReadyPendingNodes(sorted, deps, states);
+    expect(ready.map((n) => n.id)).toEqual(["b"]);
+  });
+
+  it("excludes pending nodes blocked by running parent", () => {
+    const nodes = [node("a", "requestInputs"), node("b", "openRouter")];
+    const edges = [edge("a", "b")];
+    const sorted = topologicalSort(nodes, edges);
+    const deps = new Map<string, Set<string>>([
+      ["a", new Set()],
+      ["b", new Set(["a"])],
+    ]);
+    const states: Record<string, OrchestratorNodeState> = {
+      a: { status: "running" },
+      b: { status: "pending" },
+    };
+    expect(collectReadyPendingNodes(sorted, deps, states)).toHaveLength(0);
   });
 });

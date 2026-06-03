@@ -21,9 +21,11 @@ import {
   topologicalSort,
   getNodeWithDeps,
   resolveInputsForNode,
+  collectReadyPendingNodes,
   type SerializedNode,
   type SerializedEdge,
 } from "./orchestrator-utils";
+import { checkNextLayerWithinHold, reconcileWorkflowCredits, getRunHoldAmount } from "../lib/credits";
 
 /** Returns the shared Prisma client singleton. */
 function getPrisma() {
@@ -140,6 +142,122 @@ interface TriggerReadyNodesParams {
   inputValues: Record<string, unknown>;
   orchestratorRunId: string;
   waitpointTokenId: string;
+}
+
+/**
+ * Skips pending nodes, reconciles credits, completes the waitpoint, and notifies the client.
+ * Returns true when the run was aborted (caller must not dispatch further layers).
+ */
+async function finalizeRunCreditExhausted(params: {
+  runId: string;
+  workflowId: string;
+  userId: string;
+  orchestratorRunId: string;
+  waitpointTokenId: string;
+  nodeStates: Record<string, NodeState>;
+  sortedNodes: SerializedNode[];
+  message: string;
+}): Promise<void> {
+  const {
+    runId,
+    workflowId,
+    userId,
+    orchestratorRunId,
+    waitpointTokenId,
+    nodeStates,
+    sortedNodes,
+    message,
+  } = params;
+
+  const now = new Date();
+  logger.warn(`[Orchestrator] Credit exhaustion abort for run ${runId}: ${message}`);
+
+  for (const node of sortedNodes) {
+    if (nodeStates[node.id]?.status !== "pending") continue;
+    nodeStates[node.id] = { status: "skipped", error: message };
+    await getPrisma().nodeRun.updateMany({
+      where: { runId, nodeId: node.id, status: "pending" },
+      data: {
+        status: "skipped",
+        finishedAt: now,
+        durationMs: 0,
+        error: message,
+      },
+    });
+  }
+
+  const nodeRuns = await getPrisma().nodeRun.findMany({ where: { runId } });
+  const durationMs = nodeRuns.reduce((sum, r) => sum + (r.durationMs ?? 0), 0);
+  const finalStatus = "failed";
+
+  await getPrisma().workflowRun.update({
+    where: { id: runId },
+    data: { status: finalStatus, finishedAt: now, durationMs },
+  });
+
+  await getPrisma().workflow.update({
+    where: { id: workflowId },
+    data: { status: "idle" },
+  });
+
+  await triggerOutboundWebhook(
+    runId,
+    "run.failed",
+    false,
+    { status: finalStatus, durationMs, reason: "credit_exhaustion" },
+    message
+  );
+
+  try {
+    const holdAmount = await getRunHoldAmount(runId);
+    const actualCost = nodeRuns.reduce((sum, r) => sum + (r.creditCost ?? 0), 0);
+    await reconcileWorkflowCredits(userId, runId, actualCost, holdAmount);
+    logger.info(
+      `[Orchestrator] Credits reconciled after credit abort. Hold: ${holdAmount}, Actual: ${actualCost}`
+    );
+  } catch (creditErr) {
+    logger.error(`[Orchestrator] Failed to reconcile after credit abort: ${creditErr}`);
+  }
+
+  await updateRootMetadata(orchestratorRunId, nodeStates, finalStatus);
+  await wait.completeToken(waitpointTokenId, { finalStatus, reason: "credit_exhaustion" });
+}
+
+/**
+ * Per-layer hold check before dispatching ready nodes. Aborts the run when the next layer
+ * estimate exceeds remaining hold (hold minus successful node costs so far).
+ */
+async function ensureCreditBudgetBeforeLayer(params: {
+  runId: string;
+  workflowId: string;
+  userId: string;
+  sortedNodes: SerializedNode[];
+  deps: Map<string, Set<string>>;
+  nodeStates: Record<string, NodeState>;
+  orchestratorRunId: string;
+  waitpointTokenId: string;
+}): Promise<boolean> {
+  const ready = collectReadyPendingNodes(params.sortedNodes, params.deps, params.nodeStates);
+  if (ready.length === 0) {
+    return false;
+  }
+
+  const check = await checkNextLayerWithinHold(params.runId, ready);
+  if (check.ok) {
+    return false;
+  }
+
+  await finalizeRunCreditExhausted({
+    runId: params.runId,
+    workflowId: params.workflowId,
+    userId: params.userId,
+    orchestratorRunId: params.orchestratorRunId,
+    waitpointTokenId: params.waitpointTokenId,
+    nodeStates: params.nodeStates,
+    sortedNodes: params.sortedNodes,
+    message: check.message,
+  });
+  return true;
 }
 
 /**
@@ -661,6 +779,29 @@ export const workflowOrchestratorTask = task({
       const targetWaitpointTokenId = token.id;
       logger.info(`[Orchestrator] Created waitpoint token: ${targetWaitpointTokenId}`);
 
+      const workflowRun = await getPrisma().workflowRun.findUnique({
+        where: { id: runId },
+        select: { userId: true },
+      });
+      if (!workflowRun) {
+        throw new Error(`WorkflowRun ${runId} not found`);
+      }
+
+      const creditAborted = await ensureCreditBudgetBeforeLayer({
+        runId,
+        workflowId,
+        userId: workflowRun.userId,
+        sortedNodes,
+        deps,
+        nodeStates,
+        orchestratorRunId: currentRunId,
+        waitpointTokenId: targetWaitpointTokenId,
+      });
+      if (creditAborted) {
+        await metadata.set("finalStatus", "failed");
+        return { finalStatus: "failed" };
+      }
+
       // Evaluate and trigger ready nodes
       await triggerReadyNodes({
         workflowId,
@@ -767,6 +908,20 @@ export const workflowOrchestratorTask = task({
       // Update the root run's metadata so the frontend gets the latest node run status immediately
       await updateRootMetadata(targetOrchestratorRunId, nodeStates);
 
+      const creditAborted = await ensureCreditBudgetBeforeLayer({
+        runId,
+        workflowId: run.workflowId,
+        userId: run.userId,
+        sortedNodes,
+        deps,
+        nodeStates,
+        orchestratorRunId: targetOrchestratorRunId,
+        waitpointTokenId: targetWaitpointTokenId,
+      });
+      if (creditAborted) {
+        return;
+      }
+
       // Evaluate and trigger ready downstream nodes
       await triggerReadyNodes({
         workflowId: run.workflowId,
@@ -835,13 +990,8 @@ export const workflowOrchestratorTask = task({
 
         // Reconcile credits
         try {
-          const holdLedger = await getPrisma().creditLedger.findFirst({
-            where: { runId, type: "hold" },
-          });
-          const holdAmount = holdLedger ? Math.abs(holdLedger.amount) : 0;
+          const holdAmount = await getRunHoldAmount(runId);
           const actualCost = terminalRuns.reduce((sum, r) => sum + (r.creditCost ?? 0), 0);
-
-          const { reconcileWorkflowCredits } = await import("../lib/credits");
           await reconcileWorkflowCredits(run.userId, runId, actualCost, holdAmount);
           logger.info(`[Coordinator] Credits reconciled for run ${runId}. Hold: ${holdAmount}, Actual: ${actualCost}`);
         } catch (creditErr) {
