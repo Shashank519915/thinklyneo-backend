@@ -62,7 +62,7 @@ export async function POST(request: Request) {
       },
     });
 
-    return NextResponse.json({ data: workflow });
+    return NextResponse.json({ data: workflow }, { status: 201 });
   } catch (error) {
     console.error("POST /api/workflows/import error:", error);
     return NextResponse.json(

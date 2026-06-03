@@ -12,6 +12,7 @@ import { prisma } from "@/lib/prisma";
 import { Prisma } from "@prisma/client";
 import { z } from "zod";
 import { estimateWorkflowCost, getOrCreateBalance } from "@/lib/credits";
+import { validateWorkflowInputs } from "@/lib/validate-input-limits";
 
 const executeSchema = z.object({
   scope: z.enum(["full", "partial", "single"]).default("full"),
@@ -88,6 +89,17 @@ export async function POST(
     const targetNodes = scope === "full"
       ? allNodes
       : allNodes.filter((n) => nodeIds?.includes(n.id));
+
+    const limitError = await validateWorkflowInputs({
+      nodes: allNodes,
+      inputValues,
+      scope,
+      targetNodeIds: nodeIds,
+    });
+
+    if (limitError) {
+      return NextResponse.json({ error: limitError.message }, { status: 400 });
+    }
 
     const estimatedCost = estimateWorkflowCost(targetNodes);
 
@@ -187,13 +199,16 @@ export async function POST(
       `[Execute] Workflow ${id} run ${run.id} started. Orchestrator: ${orchestratorRun.id}`
     );
 
-    return NextResponse.json({
-      data: {
-        runId: run.id,
-        orchestratorRunId: orchestratorRun.id,
-        publicAccessToken,
+    return NextResponse.json(
+      {
+        data: {
+          runId: run.id,
+          orchestratorRunId: orchestratorRun.id,
+          publicAccessToken,
+        },
       },
-    });
+      { status: 202 }
+    );
   } catch (error) {
     console.error("POST /api/workflows/[id]/execute error:", error);
     return NextResponse.json(

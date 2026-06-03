@@ -140,6 +140,10 @@ export const gptImage2Definition: NodeDefinition = {
       },
     },
   ],
+  limits: {
+    prompt: { maxLength: 32000 },
+    uploadedImages: { mediaKind: "image", maxCount: 10, maxSizeMb: 15, maxWidth: 4096, maxHeight: 4096 },
+  },
   inputSchema: gptImage2InputSchema,
   outputSchema: gptImage2OutputSchema,
   retryPerProvider: 1,

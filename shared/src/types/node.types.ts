@@ -28,6 +28,16 @@ export interface NodeOutputDefinition {
   };
 }
 
+export interface NodeInputLimit {
+  maxCount?: number;
+  maxSizeMb?: number;
+  maxLength?: number;
+  maxDurationSeconds?: number;
+  maxWidth?: number;
+  maxHeight?: number;
+  mediaKind?: "image" | "video" | "audio" | "file";
+}
+
 export interface NodeDefinition {
   type: string;
   name: string;
@@ -41,7 +51,7 @@ export interface NodeDefinition {
   };
   inputs: NodeParameter[];
   outputs: NodeOutputDefinition[];
-  limits?: Record<string, { maxCount?: number; maxSizeMb?: number; maxLength?: number }>;
+  limits?: Record<string, NodeInputLimit>;
   /** Ordered provider chain - first success wins; transparent to orchestrator */
   providers: NodeProviderConfig[];
   /** Default timeout (seconds) when a provider entry omits timeoutSeconds */

@@ -8,25 +8,17 @@ import { task, metadata, logger, wait, tasks } from "@trigger.dev/sdk/v3";
 import { Prisma } from "@prisma/client";
 import { prisma } from "../lib/prisma";
 import { triggerOutboundWebhook } from "../lib/webhooks";
+import {
+  topologicalSort,
+  getNodeWithDeps,
+  resolveInputsForNode,
+  type SerializedNode,
+  type SerializedEdge,
+} from "./orchestrator-utils";
 
 /** Returns the shared Prisma client singleton. */
 function getPrisma() {
   return prisma;
-}
-
-/** Serialized node from React Flow — only the fields we need for execution. */
-interface SerializedNode {
-  id: string;
-  type: string;
-  data: Record<string, unknown>;
-}
-
-/** Serialized edge from React Flow. */
-interface SerializedEdge {
-  source: string;
-  target: string;
-  sourceHandle?: string | null;
-  targetHandle?: string | null;
 }
 
 /** Per-node state streamed to the frontend via metadata. */
@@ -50,155 +42,6 @@ interface OrchestratorPayload {
   nodeCompleted?: string;
   orchestratorRunId?: string;
   waitpointTokenId?: string;
-}
-
-/**
- * Kahn-style topological sort for deterministic execution order.
- */
-function topologicalSort(nodes: SerializedNode[], edges: SerializedEdge[]): SerializedNode[] {
-  const inDegree = new Map<string, number>();
-  const adjacency = new Map<string, string[]>();
-  const nodeMap = new Map<string, SerializedNode>();
-
-  for (const n of nodes) {
-    inDegree.set(n.id, 0);
-    adjacency.set(n.id, []);
-    nodeMap.set(n.id, n);
-  }
-
-  for (const e of edges) {
-    if (!nodeMap.has(e.source) || !nodeMap.has(e.target)) continue;
-    const arr = adjacency.get(e.source) ?? [];
-    arr.push(e.target);
-    adjacency.set(e.source, arr);
-    inDegree.set(e.target, (inDegree.get(e.target) ?? 0) + 1);
-  }
-
-  const queue: string[] = [];
-  for (const [id, degree] of inDegree.entries()) {
-    if (degree === 0) queue.push(id);
-  }
-
-  const sorted: SerializedNode[] = [];
-  while (queue.length > 0) {
-    const id = queue.shift()!;
-    const node = nodeMap.get(id);
-    if (node) sorted.push(node);
-    for (const neighbor of adjacency.get(id) ?? []) {
-      const newDegree = (inDegree.get(neighbor) ?? 0) - 1;
-      inDegree.set(neighbor, newDegree);
-      if (newDegree === 0) queue.push(neighbor);
-    }
-  }
-
-  return sorted;
-}
-
-/**
- * Builds execution frontier for selective runs — union of explicitly targeted ids plus any uncached transitive deps.
- */
-function getNodeWithDeps(
-  nodes: SerializedNode[],
-  edges: SerializedEdge[],
-  targetIds: string[],
-  existingOutputs: Set<string>
-): SerializedNode[] {
-  const nodeMap = new Map(nodes.map((n) => [n.id, n]));
-  const toExecute = new Set<string>();
-  const forceRun = new Set(targetIds);
-
-  function collectDeps(id: string, isTarget: boolean) {
-    if (toExecute.has(id)) return;
-    if (!isTarget && existingOutputs.has(id)) return;
-    toExecute.add(id);
-    for (const edge of edges) {
-      if (edge.target === id) {
-        collectDeps(edge.source, false);
-      }
-    }
-  }
-
-  for (const id of targetIds) {
-    collectDeps(id, forceRun.has(id));
-  }
-
-  const selectedNodes = Array.from(toExecute)
-    .map((id) => nodeMap.get(id))
-    .filter((n): n is SerializedNode => n !== undefined);
-
-  return topologicalSort(selectedNodes, edges);
-}
-
-/**
- * Merges static node data, Request-Inputs overlays, edge fan-in, and Gemini vision arrays.
- */
-function resolveInputsForNode(
-  node: SerializedNode,
-  edges: SerializedEdge[],
-  resolvedOutputs: Map<string, unknown>,
-  inputValues: Record<string, unknown>
-): Record<string, unknown> {
-  const inputs: Record<string, unknown> = {};
-
-  // Copy manual values from node data
-  const data = node.data;
-  if (data["inputs"] && typeof data["inputs"] === "object") {
-    Object.assign(inputs, data["inputs"] as Record<string, unknown>);
-  }
-  if (data["fields"] && Array.isArray(data["fields"])) {
-    for (const f of data["fields"] as Array<{ id: string; value: unknown }>) {
-      inputs[f.id] = f.value;
-    }
-  }
-
-  // Request-Inputs: inject the run's inputValues
-  if (node.type === "requestInputs") {
-    for (const [k, v] of Object.entries(inputValues)) {
-      inputs[k] = v;
-    }
-    return inputs;
-  }
-
-  // All other nodes: resolve from connected upstream edges
-  const incomingEdges = edges.filter((e) => e.target === node.id);
-  for (const edge of incomingEdges) {
-    const sourceOutput = resolvedOutputs.get(edge.source);
-    if (sourceOutput === undefined) continue;
-
-    const targetHandle = edge.targetHandle ?? "input";
-    const sourceHandle = edge.sourceHandle ?? "";
-
-    let valueToPass: unknown = sourceOutput;
-    if (
-      sourceOutput !== null &&
-      typeof sourceOutput === "object" &&
-      !Array.isArray(sourceOutput) &&
-      sourceHandle
-    ) {
-      const obj = sourceOutput as Record<string, unknown>;
-      const key = sourceHandle.startsWith("out:") ? sourceHandle.slice(4) : sourceHandle;
-      if (key in obj) {
-        valueToPass = obj[key];
-      } else if (sourceHandle in obj) {
-        valueToPass = obj[sourceHandle];
-      }
-    }
-
-    // Multi-image fan-in for Gemini Vision
-    if (targetHandle === "in:images") {
-      const existingImages = (inputs["images"] as unknown[]) ?? [];
-      if (valueToPass !== null && valueToPass !== undefined) {
-        inputs["images"] = [...existingImages, valueToPass];
-      } else {
-        inputs["images"] = existingImages;
-      }
-    } else {
-      const key = targetHandle.startsWith("in:") ? targetHandle.slice(3) : targetHandle;
-      inputs[key] = valueToPass;
-    }
-  }
-
-  return inputs;
 }
 
 /**

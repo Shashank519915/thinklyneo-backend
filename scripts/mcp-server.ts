@@ -312,6 +312,17 @@ async function main() {
           }
 
           const allNodes = (workflow.nodes as any[]) ?? [];
+
+          const { validateWorkflowInputs } = await import("../lib/validate-input-limits.js");
+          const limitError = await validateWorkflowInputs({
+            nodes: allNodes,
+            inputValues,
+            scope: "full",
+          });
+          if (limitError) {
+            throw new McpError(ErrorCode.InvalidParams, limitError.message);
+          }
+
           const estimatedCost = estimateWorkflowCost(allNodes);
 
           const balance = await getOrCreateBalance(userId);

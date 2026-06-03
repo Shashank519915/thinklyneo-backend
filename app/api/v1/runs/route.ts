@@ -4,6 +4,7 @@ import { Prisma } from "@prisma/client";
 import { verifyApiRequest } from "@/lib/api-auth";
 import { z } from "zod";
 import { estimateWorkflowCost, getOrCreateBalance } from "@/lib/credits";
+import { validateWorkflowInputs } from "@/lib/validate-input-limits";
 import { triggerOutboundWebhook } from "@/lib/webhooks";
 
 const runSchema = z.object({
@@ -72,6 +73,20 @@ export async function POST(request: Request) {
     const targetNodes = scope === "full"
       ? allNodes
       : allNodes.filter((n) => nodeIds?.includes(n.id));
+
+    const limitError = await validateWorkflowInputs({
+      nodes: allNodes,
+      inputValues,
+      scope,
+      targetNodeIds: nodeIds,
+    });
+
+    if (limitError) {
+      return NextResponse.json(
+        { error: limitError.message },
+        { status: 400, headers: rateLimitHeaders }
+      );
+    }
 
     const estimatedCost = estimateWorkflowCost(targetNodes);
 

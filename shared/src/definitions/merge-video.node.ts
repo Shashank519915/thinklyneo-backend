@@ -65,6 +65,11 @@ export const mergeVideoDefinition: NodeDefinition = {
       },
     },
   ],
+  limits: {
+    videoUrl1: { mediaKind: "video", maxSizeMb: 100, maxDurationSeconds: 600 },
+    videoUrl2: { mediaKind: "video", maxSizeMb: 100, maxDurationSeconds: 600 },
+    videoUrl3: { mediaKind: "video", maxSizeMb: 100, maxDurationSeconds: 600 },
+  },
   inputSchema: mergeVideoInputSchema,
   outputSchema: mergeVideoOutputSchema,
   retryPerProvider: 1,

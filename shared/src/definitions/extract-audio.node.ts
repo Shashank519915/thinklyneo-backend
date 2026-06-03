@@ -42,6 +42,9 @@ export const extractAudioDefinition: NodeDefinition = {
       },
     },
   ],
+  limits: {
+    videoUrl: { mediaKind: "video", maxSizeMb: 100, maxDurationSeconds: 600 },
+  },
   inputSchema: extractAudioInputSchema,
   outputSchema: extractAudioOutputSchema,
   retryPerProvider: 1,

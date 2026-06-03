@@ -102,6 +102,9 @@ export const cropImageDefinition: NodeDefinition = {
       },
     },
   ],
+  limits: {
+    inputImage: { mediaKind: "image", maxSizeMb: 15, maxWidth: 4096, maxHeight: 4096 },
+  },
   inputSchema: cropImageInputSchema,
   outputSchema: cropImageOutputSchema,
   retryPerProvider: 1,

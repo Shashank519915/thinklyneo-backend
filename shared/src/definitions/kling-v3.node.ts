@@ -78,6 +78,10 @@ export const klingV3Definition: NodeDefinition = {
       },
     },
   ],
+  limits: {
+    prompt: { maxLength: 32000 },
+    inputImage: { mediaKind: "image", maxSizeMb: 15, maxWidth: 4096, maxHeight: 4096 },
+  },
   inputSchema: klingV3InputSchema,
   outputSchema: klingV3OutputSchema,
   retryPerProvider: 1,

@@ -3,25 +3,7 @@
  */
 
 import { prisma } from "./prisma";
-import {
-  cropImageDefinition,
-  openrouterLlmDefinition,
-  gptImage2Definition,
-  klingV3Definition,
-  mergeVideoDefinition,
-  mergeAVDefinition,
-  extractAudioDefinition,
-} from "@galaxy/shared";
-
-const DEFINITIONS: Record<string, any> = {
-  cropImage: cropImageDefinition,
-  gemini: openrouterLlmDefinition,
-  gptImage2: gptImage2Definition,
-  klingV3: klingV3Definition,
-  mergeVideo: mergeVideoDefinition,
-  mergeAV: mergeAVDefinition,
-  extractAudio: extractAudioDefinition,
-};
+import { estimateWorkflowCostMicrocredits } from "@galaxy/shared";
 
 const INITIAL_GRANT_MICROCREDITS = 100000000; // 100.00 credits
 
@@ -78,15 +60,7 @@ export async function getOrCreateBalance(
  * Sums up the base credit costs of all nodes inside the given workflow list.
  */
 export function estimateWorkflowCost(nodes: any[]): number {
-  let total = 0;
-  for (const node of nodes) {
-    const type = node.type;
-    const definition = DEFINITIONS[type];
-    if (definition && definition.credits) {
-      total += definition.credits.base || 0;
-    }
-  }
-  return total;
+  return estimateWorkflowCostMicrocredits(nodes);
 }
 
 /**

@@ -288,7 +288,7 @@ export async function POST() {
       },
     });
 
-    return NextResponse.json({ data: workflow });
+    return NextResponse.json({ data: workflow }, { status: 201 });
   } catch (error) {
     console.error("POST /api/workflows/sample error:", error);
     return NextResponse.json(

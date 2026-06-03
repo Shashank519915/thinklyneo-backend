@@ -54,6 +54,10 @@ export const mergeAVDefinition: NodeDefinition = {
       },
     },
   ],
+  limits: {
+    videoUrl: { mediaKind: "video", maxSizeMb: 100, maxDurationSeconds: 600 },
+    audioUrl: { mediaKind: "audio", maxSizeMb: 50, maxDurationSeconds: 600 },
+  },
   inputSchema: mergeAVInputSchema,
   outputSchema: mergeAVOutputSchema,
   retryPerProvider: 1,

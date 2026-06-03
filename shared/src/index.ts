@@ -11,4 +11,7 @@ export * from "./types/provider.types";
 export * from "./types/node.types";
 
 // Export node definitions & schemas
-export * from "./definitions";
+export * from "./definitions/index";
+export * from "./definitions/registry";
+export * from "./platform-limits";
+export * from "./input-limits";

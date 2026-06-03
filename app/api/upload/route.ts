@@ -6,6 +6,8 @@
 import { auth } from "@clerk/nextjs/server";
 import { NextResponse } from "next/server";
 import { createHmac } from "crypto";
+import sharp from "sharp";
+import { maxUploadBytesForMime, PLATFORM_LIMITS } from "@galaxy/shared";
 
 function extractTransloaditUrl(
   uploads?: Array<{ ssl_url?: string; url?: string }>,
@@ -56,8 +58,42 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "No file provided" }, { status: 400 });
     }
 
+    const mime = file.type || "application/octet-stream";
+    const maxBytes = maxUploadBytesForMime(mime);
+    if (file.size > maxBytes) {
+      const maxMb = Math.round(maxBytes / (1024 * 1024));
+      return NextResponse.json(
+        {
+          error: `File exceeds maximum upload size of ${maxMb}MB for ${mime.split("/")[0] || "file"} uploads.`,
+        },
+        { status: 400 }
+      );
+    }
+
     const bytes = await file.arrayBuffer();
     const buffer = Buffer.from(bytes);
+
+    if (mime.startsWith("image/")) {
+      try {
+        const meta = await sharp(buffer).metadata();
+        const maxW = PLATFORM_LIMITS.image.maxWidth ?? 4096;
+        const maxH = PLATFORM_LIMITS.image.maxHeight ?? 4096;
+        if (meta.width && meta.width > maxW) {
+          return NextResponse.json(
+            { error: `Image width ${meta.width}px exceeds maximum ${maxW}px.` },
+            { status: 400 }
+          );
+        }
+        if (meta.height && meta.height > maxH) {
+          return NextResponse.json(
+            { error: `Image height ${meta.height}px exceeds maximum ${maxH}px.` },
+            { status: 400 }
+          );
+        }
+      } catch {
+        return NextResponse.json({ error: "Invalid or unsupported image file." }, { status: 400 });
+      }
+    }
 
     const authKey = process.env.TRANSLOADIT_KEY;
     const authSecret = process.env.TRANSLOADIT_SECRET;
