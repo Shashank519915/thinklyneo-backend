@@ -9,6 +9,7 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "../lib/prisma";
 import { triggerOutboundWebhook } from "../lib/webhooks";
 import {
+  parseExtractAudioFormat,
   parseMergeVideoTransition,
   resolveActiveRunNodeIds,
   resolveMergeAVAudioUrl,
@@ -476,6 +477,7 @@ async function triggerReadyNodes(params: TriggerReadyNodesParams) {
       } else if (node.type === "extractAudio") {
         await tasks.trigger("extract-audio", {
           videoUrl: (resolvedInputs["videoUrl"] as string) ?? "",
+          format: parseExtractAudioFormat(resolvedInputs["format"]),
           runId,
           nodeRunId: node.id,
           orchestratorRunId,

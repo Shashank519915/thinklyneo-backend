@@ -8,13 +8,19 @@ import * as path from "path";
 import * as os from "os";
 import { createHmac } from "crypto";
 import type { NodeProviderConfig } from "@galaxy/shared";
-import { extractAudioDefinition } from "@galaxy/shared";
+import {
+  extractAudioDefinition,
+  extractAudioFfmpegConfig,
+  parseExtractAudioFormat,
+  type ExtractAudioFormat,
+} from "@galaxy/shared";
 import { executeStubProvider } from "./executors";
 import type { ProviderExecutorContext } from "./provider-chain";
 import { runNodeTaskWithProviders } from "./task-coordination";
 
 interface ExtractAudioPayload {
   videoUrl: string;
+  format?: ExtractAudioFormat | string;
   runId: string;
   nodeRunId: string;
   orchestratorRunId?: string;
@@ -25,9 +31,14 @@ interface ExtractAudioPayload {
 interface ExtractAudioFfmpegInput {
   videoUrl: string;
   nodeRunId: string;
+  format: ExtractAudioFormat;
 }
 
-async function uploadBufferToTransloadit(buffer: Buffer, filename: string): Promise<string> {
+async function uploadBufferToTransloadit(
+  buffer: Buffer,
+  filename: string,
+  mime: string
+): Promise<string> {
   const authKey = process.env.TRANSLOADIT_KEY!;
   const authSecret = process.env.TRANSLOADIT_SECRET!;
   if (!authKey || !authSecret) throw new Error("Transloadit credentials not configured");
@@ -46,7 +57,7 @@ async function uploadBufferToTransloadit(buffer: Buffer, filename: string): Prom
   const formData = new FormData();
   formData.append("params", params);
   formData.append("signature", `sha1:${signature}`);
-  formData.append("file", new Blob([new Uint8Array(buffer)], { type: "audio/mp3" }), filename);
+  formData.append("file", new Blob([new Uint8Array(buffer)], { type: mime }), filename);
 
   const response = await fetch("https://api2.transloadit.com/assemblies", { method: "POST", body: formData });
   if (!response.ok) throw new Error(`Transloadit API error ${response.status}: ${await response.text()}`);
@@ -118,21 +129,28 @@ async function executeExtractAudioFfmpegProvider(
   input: ExtractAudioFfmpegInput,
   ctx: ProviderExecutorContext
 ): Promise<string> {
-  ctx.appendLog(`[${config.id}] Starting audio extraction...`);
-  const { videoUrl, nodeRunId } = input;
+  const { videoUrl, nodeRunId, format } = input;
+  const { codec, ext, mime } = extractAudioFfmpegConfig(format);
+  ctx.appendLog(`[${config.id}] Starting audio extraction (format: ${format})...`);
+
   const tmpDir = os.tmpdir();
   const videoPath = path.join(tmpDir, `video_source_${nodeRunId}.mp4`);
-  const outputPath = path.join(tmpDir, `extracted_${nodeRunId}.mp3`);
+  const outputPath = path.join(tmpDir, `extracted_${nodeRunId}.${ext}`);
 
   try {
     ctx.appendLog(`[${config.id}] Downloading video source...`);
     await downloadFile(videoUrl, videoPath);
 
-    ctx.appendLog(`[${config.id}] Running ffmpeg to extract audio track...`);
+    ctx.appendLog(`[${config.id}] Running ffmpeg (${codec})...`);
     const Ffmpeg = (await import("fluent-ffmpeg")).default;
+    const outputOptions = ["-vn", `-acodec`, codec];
+    if (format === "aac") {
+      outputOptions.push("-b:a", "192k");
+    }
+
     await new Promise<void>((resolve, reject) => {
       Ffmpeg(videoPath)
-        .outputOptions(["-vn", "-acodec libmp3lame"])
+        .outputOptions(outputOptions)
         .output(outputPath)
         .on("end", () => resolve())
         .on("error", (err) => reject(err))
@@ -140,8 +158,12 @@ async function executeExtractAudioFfmpegProvider(
     });
 
     const outputBuffer = fs.readFileSync(outputPath);
-    const outputUrl = await uploadBufferToTransloadit(outputBuffer, `extracted_${nodeRunId}.mp3`);
-    ctx.appendLog(`[${config.id}] Success: Extracted audio uploaded to ${outputUrl}`);
+    const outputUrl = await uploadBufferToTransloadit(
+      outputBuffer,
+      `extracted_${nodeRunId}.${ext}`,
+      mime
+    );
+    ctx.appendLog(`[${config.id}] Success: Extracted ${format} uploaded to ${outputUrl}`);
     return outputUrl;
   } finally {
     cleanupFile(videoPath);
@@ -154,14 +176,17 @@ export const extractAudioTask = task({
   maxDuration: 300,
   run: async (payload: ExtractAudioPayload) => {
     const { videoUrl, runId, nodeRunId, orchestratorRunId, waitpointTokenId, workflowId } = payload;
+    const format = parseExtractAudioFormat(payload.format);
 
-    console.log(`[ExtractAudioTask] Starting extract-audio (nodeRunId: ${nodeRunId})`);
+    console.log(
+      `[ExtractAudioTask] Starting extract-audio (nodeRunId: ${nodeRunId}, format: ${format})`
+    );
 
     return runNodeTaskWithProviders({
       taskLabel: "ExtractAudioTask",
       definition: extractAudioDefinition,
       coordination: { runId, nodeRunId, orchestratorRunId, waitpointTokenId, workflowId },
-      input: { videoUrl, nodeRunId },
+      input: { videoUrl, nodeRunId, format },
       executors: {
         ffmpeg: executeExtractAudioFfmpegProvider,
         stub: executeStubProvider,
