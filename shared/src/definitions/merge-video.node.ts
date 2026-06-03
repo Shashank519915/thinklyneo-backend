@@ -1,30 +1,56 @@
 import { z } from "zod";
+import { parseMediaList } from "../media-list";
 import { NodeDefinition } from "../types/node.types";
 
+export const mergeVideoTransitionSchema = z.enum(["none", "fade", "dissolve"]);
+
 export const mergeVideoInputSchema = z.object({
-  videoUrl1: z.string({ required_error: "First video is required" }).min(1, "First video is required"),
-  videoUrl2: z.string({ required_error: "Second video is required" }).min(1, "Second video is required"),
-  videoUrl3: z.string().nullable().optional(),
+  video_urls: z
+    .array(z.string().min(1))
+    .min(2, "At least two videos are required"),
+  transition: mergeVideoTransitionSchema.default("none"),
 });
 
 export const mergeVideoOutputSchema = z.object({
   outputVideo: z.string().url(),
 });
 
+/** Resolves wired/manual/legacy merge inputs into an ordered URL list. */
+export function resolveMergeVideoUrls(resolvedInputs: Record<string, unknown>): string[] {
+  const urls: string[] = [];
+  const raw = resolvedInputs.video_urls;
+  if (Array.isArray(raw)) {
+    for (const item of raw) {
+      urls.push(...parseMediaList(item));
+    }
+  } else if (raw != null) {
+    urls.push(...parseMediaList(raw));
+  }
+
+  if (urls.length < 2) {
+    for (const key of ["videoUrl1", "videoUrl2", "videoUrl3"] as const) {
+      urls.push(...parseMediaList(resolvedInputs[key]));
+    }
+  }
+
+  return urls;
+}
+
 export const mergeVideoDefinition: NodeDefinition = {
   type: "mergeVideo",
-  name: "Merge Video",
+  name: "Merge Videos",
+  description: "Concatenate multiple videos into one",
   category: "video",
   icon: "Video",
   color: "teal",
   credits: {
-    base: 300000, // 0.30M microcredits
+    base: 40000, // ~0.04M microcredits (Magica parity)
   },
   inputs: [
     {
-      key: "videoUrl1",
-      label: "First Video Input",
-      type: "file-upload",
+      key: "video_urls",
+      label: "Videos",
+      type: "video-array",
       required: true,
       group: "primary",
       handle: {
@@ -33,24 +59,19 @@ export const mergeVideoDefinition: NodeDefinition = {
       },
     },
     {
-      key: "videoUrl2",
-      label: "Second Video Input",
-      type: "file-upload",
-      required: true,
+      key: "transition",
+      label: "Transition",
+      type: "select",
       group: "primary",
+      defaultValue: "none",
+      options: [
+        { value: "none", label: "none" },
+        { value: "fade", label: "fade" },
+        { value: "dissolve", label: "dissolve" },
+      ],
       handle: {
-        type: "video",
-        color: "#22c55e",
-      },
-    },
-    {
-      key: "videoUrl3",
-      label: "Third Video Input (Optional)",
-      type: "file-upload",
-      group: "advanced",
-      handle: {
-        type: "video",
-        color: "#22c55e",
+        type: "text",
+        color: "#f59e0b",
       },
     },
   ],
@@ -66,9 +87,12 @@ export const mergeVideoDefinition: NodeDefinition = {
     },
   ],
   limits: {
-    videoUrl1: { mediaKind: "video", maxSizeMb: 100, maxDurationSeconds: 600 },
-    videoUrl2: { mediaKind: "video", maxSizeMb: 100, maxDurationSeconds: 600 },
-    videoUrl3: { mediaKind: "video", maxSizeMb: 100, maxDurationSeconds: 600 },
+    video_urls: {
+      mediaKind: "video",
+      maxCount: 10,
+      maxSizeMb: 100,
+      maxDurationSeconds: 600,
+    },
   },
   inputSchema: mergeVideoInputSchema,
   outputSchema: mergeVideoOutputSchema,

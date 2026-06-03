@@ -1,5 +1,5 @@
 /**
- * @fileoverview Trigger.dev `merge-video`: FFmpeg concat with config-driven provider fallback.
+ * @fileoverview Trigger.dev `merge-video`: FFmpeg concat or xfade transitions with provider fallback.
  */
 
 import { task, wait } from "@trigger.dev/sdk/v3";
@@ -13,10 +13,11 @@ import { executeStubProvider } from "./executors";
 import type { ProviderExecutorContext } from "./provider-chain";
 import { runNodeTaskWithProviders } from "./task-coordination";
 
+export type MergeVideoTransition = "none" | "fade" | "dissolve";
+
 interface MergeVideoPayload {
-  videoUrl1: string;
-  videoUrl2: string;
-  videoUrl3?: string | null;
+  videoUrls: string[];
+  transition?: MergeVideoTransition;
   runId: string;
   nodeRunId: string;
   orchestratorRunId?: string;
@@ -25,11 +26,12 @@ interface MergeVideoPayload {
 }
 
 interface MergeVideoFfmpegInput {
-  videoUrl1: string;
-  videoUrl2: string;
-  videoUrl3?: string | null;
+  videoUrls: string[];
+  transition: MergeVideoTransition;
   nodeRunId: string;
 }
+
+const XFADE_DURATION_SEC = 1;
 
 async function uploadBufferToTransloadit(buffer: Buffer, filename: string): Promise<string> {
   const authKey = process.env.TRANSLOADIT_KEY!;
@@ -117,38 +119,22 @@ function cleanupFile(filePath: string): void {
   }
 }
 
-async function executeMergeVideoFfmpegProvider(
-  config: NodeProviderConfig,
-  input: MergeVideoFfmpegInput,
-  ctx: ProviderExecutorContext
-): Promise<string> {
-  ctx.appendLog(`[${config.id}] Starting video concatenation...`);
-  const { videoUrl1, videoUrl2, videoUrl3, nodeRunId } = input;
-  const tmpDir = os.tmpdir();
-  const inputPath1 = path.join(tmpDir, `input1_${nodeRunId}.mp4`);
-  const inputPath2 = path.join(tmpDir, `input2_${nodeRunId}.mp4`);
-  const inputPath3 = path.join(tmpDir, `input3_${nodeRunId}.mp4`);
-  const concatTxtPath = path.join(tmpDir, `concat_${nodeRunId}.txt`);
-  const outputPath = path.join(tmpDir, `merged_${nodeRunId}.mp4`);
+function probeDurationSeconds(filePath: string): Promise<number> {
+  return new Promise((resolve, reject) => {
+    import("fluent-ffmpeg")
+      .then(({ default: ffmpeg }) => {
+        ffmpeg.ffprobe(filePath, (err, data) => {
+          if (err) reject(err);
+          else resolve(data.format.duration ?? 0);
+        });
+      })
+      .catch(reject);
+  });
+}
 
-  try {
-    ctx.appendLog(`[${config.id}] Downloading video inputs...`);
-    await downloadFile(videoUrl1, inputPath1);
-    await downloadFile(videoUrl2, inputPath2);
-    const filesToConcat = [inputPath1, inputPath2];
-    if (videoUrl3) {
-      await downloadFile(videoUrl3, inputPath3);
-      filesToConcat.push(inputPath3);
-    }
-
-    const concatContent = filesToConcat
-      .map((filePath) => `file '${filePath.replace(/\\/g, "/")}'`)
-      .join("\n");
-    fs.writeFileSync(concatTxtPath, concatContent);
-    ctx.appendLog(`[${config.id}] Running ffmpeg concat...`);
-
-    const Ffmpeg = (await import("fluent-ffmpeg")).default;
-    await new Promise<void>((resolve, reject) => {
+function runFfmpegConcat(concatTxtPath: string, outputPath: string): Promise<void> {
+  return import("fluent-ffmpeg").then(({ default: Ffmpeg }) =>
+    new Promise<void>((resolve, reject) => {
       Ffmpeg(concatTxtPath)
         .inputOptions(["-f concat", "-safe 0"])
         .outputOptions(["-c copy"])
@@ -156,16 +142,91 @@ async function executeMergeVideoFfmpegProvider(
         .on("end", () => resolve())
         .on("error", (err) => reject(err))
         .run();
+    })
+  );
+}
+
+function runFfmpegXfade(
+  inputPaths: string[],
+  outputPath: string,
+  transition: "fade" | "dissolve"
+): Promise<void> {
+  const xfadeName = transition === "dissolve" ? "dissolve" : "fade";
+  return import("fluent-ffmpeg").then(async ({ default: ffmpeg }) => {
+    const durations = await Promise.all(inputPaths.map(probeDurationSeconds));
+    const filterParts: string[] = [];
+    let prevLabel = "0:v";
+    let offset = Math.max(0, durations[0]! - XFADE_DURATION_SEC);
+
+    for (let i = 1; i < inputPaths.length; i++) {
+      const outLabel = i === inputPaths.length - 1 ? "vout" : `vx${i}`;
+      filterParts.push(
+        `[${prevLabel}][${i}:v]xfade=transition=${xfadeName}:duration=${XFADE_DURATION_SEC}:offset=${offset}[${outLabel}]`
+      );
+      prevLabel = outLabel;
+      offset += Math.max(0, durations[i]! - XFADE_DURATION_SEC);
+    }
+
+    const filterComplex = filterParts.join(";");
+
+    return new Promise<void>((resolve, reject) => {
+      let cmd = ffmpeg();
+      for (const p of inputPaths) {
+        cmd = cmd.input(p);
+      }
+      cmd
+        .complexFilter(filterComplex)
+        .outputOptions(["-map", "[vout]", "-pix_fmt", "yuv420p", "-c:v", "libx264", "-an"])
+        .output(outputPath)
+        .on("end", () => resolve())
+        .on("error", (err) => reject(err))
+        .run();
     });
+  });
+}
+
+async function executeMergeVideoFfmpegProvider(
+  config: NodeProviderConfig,
+  input: MergeVideoFfmpegInput,
+  ctx: ProviderExecutorContext
+): Promise<string> {
+  ctx.appendLog(`[${config.id}] Starting video merge (${input.transition})...`);
+  const { videoUrls, transition, nodeRunId } = input;
+  if (videoUrls.length < 2) {
+    throw new Error("At least two video URLs are required to merge");
+  }
+
+  const tmpDir = os.tmpdir();
+  const inputPaths: string[] = [];
+  const concatTxtPath = path.join(tmpDir, `concat_${nodeRunId}.txt`);
+  const outputPath = path.join(tmpDir, `merged_${nodeRunId}.mp4`);
+
+  try {
+    ctx.appendLog(`[${config.id}] Downloading ${videoUrls.length} video(s)...`);
+    for (let i = 0; i < videoUrls.length; i++) {
+      const p = path.join(tmpDir, `input_${nodeRunId}_${i}.mp4`);
+      await downloadFile(videoUrls[i]!, p);
+      inputPaths.push(p);
+    }
+
+    if (transition === "none") {
+      const concatContent = inputPaths
+        .map((filePath) => `file '${filePath.replace(/\\/g, "/")}'`)
+        .join("\n");
+      fs.writeFileSync(concatTxtPath, concatContent);
+      ctx.appendLog(`[${config.id}] Running ffmpeg concat (copy)...`);
+      await runFfmpegConcat(concatTxtPath, outputPath);
+    } else {
+      ctx.appendLog(`[${config.id}] Running ffmpeg xfade (${transition})...`);
+      await runFfmpegXfade(inputPaths, outputPath, transition);
+    }
 
     const mergedBuffer = fs.readFileSync(outputPath);
     const outputUrl = await uploadBufferToTransloadit(mergedBuffer, `merged_${nodeRunId}.mp4`);
-    ctx.appendLog(`[${config.id}] Success: Merged video uploaded to ${outputUrl}`);
+    ctx.appendLog(`[${config.id}] Success: merged video at ${outputUrl}`);
     return outputUrl;
   } finally {
-    cleanupFile(inputPath1);
-    cleanupFile(inputPath2);
-    if (videoUrl3) cleanupFile(inputPath3);
+    for (const p of inputPaths) cleanupFile(p);
     cleanupFile(concatTxtPath);
     cleanupFile(outputPath);
   }
@@ -175,16 +236,23 @@ export const mergeVideoTask = task({
   id: "merge-video",
   maxDuration: 300,
   run: async (payload: MergeVideoPayload) => {
-    const { videoUrl1, videoUrl2, videoUrl3, runId, nodeRunId, orchestratorRunId, waitpointTokenId, workflowId } =
-      payload;
+    const {
+      videoUrls,
+      transition = "none",
+      runId,
+      nodeRunId,
+      orchestratorRunId,
+      waitpointTokenId,
+      workflowId,
+    } = payload;
 
-    console.log(`[MergeVideoTask] Starting merge-video (nodeRunId: ${nodeRunId})`);
+    console.log(`[MergeVideoTask] Starting merge-video (nodeRunId: ${nodeRunId}, videos: ${videoUrls.length})`);
 
     return runNodeTaskWithProviders({
       taskLabel: "MergeVideoTask",
       definition: mergeVideoDefinition,
       coordination: { runId, nodeRunId, orchestratorRunId, waitpointTokenId, workflowId },
-      input: { videoUrl1, videoUrl2, videoUrl3, nodeRunId },
+      input: { videoUrls, transition, nodeRunId },
       executors: {
         ffmpeg: executeMergeVideoFfmpegProvider,
         stub: executeStubProvider,

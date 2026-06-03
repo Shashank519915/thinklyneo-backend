@@ -15,3 +15,4 @@ export * from "./definitions/index";
 export * from "./definitions/registry";
 export * from "./platform-limits";
 export * from "./input-limits";
+export * from "./media-list";

@@ -157,6 +157,13 @@ export function resolveInputsForNode(
       } else {
         inputs["images"] = existingImages;
       }
+    } else if (targetHandle === "in:video_urls") {
+      const existingVideos = (inputs["video_urls"] as unknown[]) ?? [];
+      if (valueToPass !== null && valueToPass !== undefined) {
+        inputs["video_urls"] = [...existingVideos, valueToPass];
+      } else {
+        inputs["video_urls"] = existingVideos;
+      }
     } else {
       const key = targetHandle.startsWith("in:") ? targetHandle.slice(3) : targetHandle;
       inputs[key] = valueToPass;

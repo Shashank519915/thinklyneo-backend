@@ -13,8 +13,8 @@ describe("estimateWorkflowCostMillions", () => {
       { type: "openRouter" },
       { type: "mergeVideo" },
     ]);
-    // 0.21 + 1.5 + 0.45 + 0.30 = 2.46
-    expect(total).toBeCloseTo(2.46);
+    // 0.21 + 1.5 + 0.45 + 0.04 = 2.20
+    expect(total).toBeCloseTo(2.2);
   });
 
   it("ignores requestInputs and response", () => {

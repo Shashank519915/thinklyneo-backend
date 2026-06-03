@@ -4,7 +4,7 @@ import type { NodeProviderConfig } from "./provider.types";
 export interface NodeParameter {
   key: string;
   label: string;
-  type: "text" | "textarea" | "number" | "slider" | "select" | "file-upload" | "image-array";
+  type: "text" | "textarea" | "number" | "slider" | "select" | "file-upload" | "image-array" | "video-array";
   required?: boolean;
   group: "primary" | "advanced";
   defaultValue?: any;
@@ -41,6 +41,8 @@ export interface NodeInputLimit {
 export interface NodeDefinition {
   type: string;
   name: string;
+  /** Shown in node header info tooltip */
+  description?: string;
   category: "text" | "image" | "video" | "audio" | "utility";
   icon: string; // Lucide icon identifier
   color: string; // Tailwind/CSS theme color description or class name (e.g. orange, blue, purple)

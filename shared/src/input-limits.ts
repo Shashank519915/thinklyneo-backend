@@ -155,7 +155,14 @@ function validateFieldAgainstLimit(
     if (err) return err;
   }
 
-  if (resolved.mediaKind === "image" && (Array.isArray(value) || (typeof value === "string" && value.includes(",")))) {
+  if (
+    resolved.mediaKind === "image" &&
+    (Array.isArray(value) || (typeof value === "string" && value.includes(",")))
+  ) {
+    return checkUrlList(value, resolved, { ...ctx, field: fieldKey }, sizeChecks);
+  }
+
+  if (resolved.mediaKind === "video" && (Array.isArray(value) || typeof value === "string")) {
     return checkUrlList(value, resolved, { ...ctx, field: fieldKey }, sizeChecks);
   }
 
@@ -240,7 +247,22 @@ function validateRequestInputValues(
         continue;
       }
 
-      const mediaKind = kind === "video" ? "video" : kind === "audio" ? "audio" : "file";
+      if (kind === "video") {
+        const err = checkUrlList(
+          raw,
+          {
+            maxCount: 10,
+            maxSizeMb: PLATFORM_LIMITS.video.maxSizeMb,
+            mediaKind: "video",
+          },
+          ctx,
+          sizeChecks
+        );
+        if (err) return err;
+        continue;
+      }
+
+      const mediaKind = kind === "audio" ? "audio" : "file";
       const platform = PLATFORM_LIMITS[mediaKind];
       const err = checkSingleMediaUrl(
         raw,
