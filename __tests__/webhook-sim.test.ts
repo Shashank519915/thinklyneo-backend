@@ -3,7 +3,11 @@
  * Mocks @trigger.dev/sdk/v3 — no Trigger cloud, no production code changes.
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import type { NodeProviderConfig } from "@galaxy/shared";
+import {
+  STUB_DEMO_IMAGE_URL,
+  STUB_DEMO_VIDEO_MP4_URL,
+  type NodeProviderConfig,
+} from "@galaxy/shared";
 
 const mockTasksTrigger = vi.fn();
 const mockCreateToken = vi.fn();
@@ -103,7 +107,7 @@ describe("executeWebhookSimProvider", () => {
 });
 
 describe("simulateCallbackTask.run", () => {
-  it("waits then completes token with landscape URL for gptImage2", async () => {
+  it("waits then completes token with demo image URL for gptImage2", async () => {
     const result = await simulateCallbackTask.run({
       tokenId: "tok_gpt",
       nodeType: "gptImage2",
@@ -113,15 +117,15 @@ describe("simulateCallbackTask.run", () => {
 
     expect(mockWaitFor).toHaveBeenCalledWith({ seconds: 1 });
     expect(mockCompleteToken).toHaveBeenCalledWith("tok_gpt", {
-      output: "https://images.transloadit.com/examples/landscape.jpg",
+      output: STUB_DEMO_IMAGE_URL,
     });
     expect(result).toEqual({
       success: true,
-      output: "https://images.transloadit.com/examples/landscape.jpg",
+      output: STUB_DEMO_IMAGE_URL,
     });
   });
 
-  it("waits then completes token with vertical mp4 for klingV3", async () => {
+  it("waits then completes token with demo surf mp4 for klingV3", async () => {
     const result = await simulateCallbackTask.run({
       tokenId: "tok_kling",
       nodeType: "klingV3",
@@ -131,7 +135,7 @@ describe("simulateCallbackTask.run", () => {
 
     expect(mockWaitFor).toHaveBeenCalledWith({ seconds: 12 });
     expect(mockCompleteToken).toHaveBeenCalledWith("tok_kling", {
-      output: "https://images.transloadit.com/examples/vertical.mp4",
+      output: STUB_DEMO_VIDEO_MP4_URL,
     });
     expect(result.output).toContain(".mp4");
   });

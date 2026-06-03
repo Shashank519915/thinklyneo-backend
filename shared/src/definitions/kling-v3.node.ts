@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { STUB_DEMO_VIDEO_MP4_URL } from "../stub-demo-urls";
 import { NodeDefinition } from "../types/node.types";
 
 export const klingV3InputSchema = z.object({
@@ -97,7 +98,7 @@ export const klingV3Definition: NodeDefinition = {
       id: "backup-stub",
       kind: "stub",
       stubDelaySeconds: 2,
-      stubUrl: "https://images.transloadit.com/examples/vertical.mp4",
+      stubUrl: STUB_DEMO_VIDEO_MP4_URL,
     },
   ],
 };

@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { parseMediaList } from "../media-list";
+import { STUB_DEMO_VIDEO_MP4_URL } from "../stub-demo-urls";
 import { isLikelyVideoUrl } from "./merge-video.node";
 import { NodeDefinition } from "../types/node.types";
 
@@ -124,7 +125,7 @@ export const mergeAVDefinition: NodeDefinition = {
       id: "backup-stub",
       kind: "stub",
       stubDelaySeconds: 2,
-      stubUrl: "https://images.transloadit.com/examples/vertical.mp4",
+      stubUrl: STUB_DEMO_VIDEO_MP4_URL,
     },
   ],
 };

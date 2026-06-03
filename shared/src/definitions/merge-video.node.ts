@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { parseMediaList } from "../media-list";
+import { STUB_DEMO_VIDEO_MP4_URL } from "../stub-demo-urls";
 import { NodeDefinition } from "../types/node.types";
 
 export const mergeVideoTransitionSchema = z.enum(["none", "fade", "dissolve"]);
@@ -129,7 +130,7 @@ export const mergeVideoDefinition: NodeDefinition = {
       id: "backup-stub",
       kind: "stub",
       stubDelaySeconds: 2,
-      stubUrl: "https://images.transloadit.com/examples/vertical.mp4",
+      stubUrl: STUB_DEMO_VIDEO_MP4_URL,
     },
   ],
 };

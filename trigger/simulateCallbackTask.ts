@@ -1,3 +1,4 @@
+import { STUB_DEMO_IMAGE_URL, STUB_DEMO_VIDEO_MP4_URL } from "@galaxy/shared";
 import { task, wait, tasks } from "@trigger.dev/sdk/v3";
 
 interface SimulateCallbackPayload {
@@ -18,9 +19,9 @@ export const simulateCallbackTask = task({
 
     let output = "";
     if (nodeType === "gptImage2") {
-      output = "https://images.transloadit.com/examples/landscape.jpg";
+      output = STUB_DEMO_IMAGE_URL;
     } else if (nodeType === "klingV3") {
-      output = "https://images.transloadit.com/examples/vertical.mp4";
+      output = STUB_DEMO_VIDEO_MP4_URL;
     }
 
     console.log(`[SimulateCallback] 📤 Completing waitpoint token ${tokenId} with output URL: ${output}`);

@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { STUB_DEMO_IMAGE_URL } from "../stub-demo-urls";
 import { NodeDefinition } from "../types/node.types";
 
 export const gptImage2InputSchema = z.object({
@@ -159,7 +160,7 @@ export const gptImage2Definition: NodeDefinition = {
       id: "backup-stub",
       kind: "stub",
       stubDelaySeconds: 2,
-      stubUrl: "https://images.transloadit.com/examples/landscape.jpg",
+      stubUrl: STUB_DEMO_IMAGE_URL,
     },
   ],
 };

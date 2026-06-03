@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { STUB_DEMO_AUDIO_MP3_URL } from "../stub-demo-urls";
 import { NodeDefinition } from "../types/node.types";
 
 export const extractAudioInputSchema = z.object({
@@ -57,7 +58,7 @@ export const extractAudioDefinition: NodeDefinition = {
       id: "backup-stub",
       kind: "stub",
       stubDelaySeconds: 2,
-      stubUrl: "https://images.transloadit.com/examples/sample.mp3",
+      stubUrl: STUB_DEMO_AUDIO_MP3_URL,
     },
   ],
 };
