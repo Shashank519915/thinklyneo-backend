@@ -12,6 +12,10 @@ export interface NodeParameter {
   max?: number;
   step?: number;
   options?: Array<{ value: string; label: string }>;
+  /** Info icon tooltip on the field label (Magica-style). */
+  tooltip?: string;
+  /** `magica-side-label` = label left, control right (Merge A/V media rows). */
+  uiVariant?: "magica-side-label" | "magica-volume-row";
   handle?: {
     type: "text" | "image" | "video" | "audio" | "file";
     color: string;

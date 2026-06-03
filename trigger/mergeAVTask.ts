@@ -16,6 +16,7 @@ import { runNodeTaskWithProviders } from "./task-coordination";
 interface MergeAVPayload {
   videoUrl: string;
   audioUrl: string;
+  audioVolume?: number;
   runId: string;
   nodeRunId: string;
   orchestratorRunId?: string;
@@ -26,6 +27,7 @@ interface MergeAVPayload {
 interface MergeAVFfmpegInput {
   videoUrl: string;
   audioUrl: string;
+  audioVolume: number;
   nodeRunId: string;
 }
 
@@ -121,7 +123,8 @@ async function executeMergeAVFfmpegProvider(
   ctx: ProviderExecutorContext
 ): Promise<string> {
   ctx.appendLog(`[${config.id}] Starting video and audio combination...`);
-  const { videoUrl, audioUrl, nodeRunId } = input;
+  const { videoUrl, audioUrl, audioVolume, nodeRunId } = input;
+  const volume = Math.min(2, Math.max(0, audioVolume));
   const tmpDir = os.tmpdir();
   const videoPath = path.join(tmpDir, `video_${nodeRunId}.mp4`);
   const audioPath = path.join(tmpDir, `audio_${nodeRunId}.mp3`);
@@ -138,7 +141,13 @@ async function executeMergeAVFfmpegProvider(
       Ffmpeg()
         .input(videoPath)
         .input(audioPath)
-        .outputOptions(["-c:v copy", "-c:a aac", "-map 0:v:0", "-map 1:a:0"])
+        .outputOptions([
+          "-c:v copy",
+          `-filter:a volume=${volume}`,
+          "-c:a aac",
+          "-map 0:v:0",
+          "-map 1:a:0",
+        ])
         .output(outputPath)
         .on("end", () => resolve())
         .on("error", (err) => reject(err))
@@ -160,7 +169,16 @@ export const mergeAVTask = task({
   id: "merge-av",
   maxDuration: 300,
   run: async (payload: MergeAVPayload) => {
-    const { videoUrl, audioUrl, runId, nodeRunId, orchestratorRunId, waitpointTokenId, workflowId } = payload;
+    const {
+      videoUrl,
+      audioUrl,
+      audioVolume = 0.5,
+      runId,
+      nodeRunId,
+      orchestratorRunId,
+      waitpointTokenId,
+      workflowId,
+    } = payload;
 
     console.log(`[MergeAVTask] Starting merge-av (nodeRunId: ${nodeRunId})`);
 
@@ -168,13 +186,13 @@ export const mergeAVTask = task({
       taskLabel: "MergeAVTask",
       definition: mergeAVDefinition,
       coordination: { runId, nodeRunId, orchestratorRunId, waitpointTokenId, workflowId },
-      input: { videoUrl, audioUrl, nodeRunId },
+      input: { videoUrl, audioUrl, audioVolume, nodeRunId },
       executors: {
         ffmpeg: executeMergeAVFfmpegProvider,
         stub: executeStubProvider,
       },
-      formatOutput: (outputUrl) => ({ outputVideo: outputUrl }),
-      formatReturn: (outputUrl) => ({ outputVideo: outputUrl }),
+      formatOutput: (outputUrl) => ({ video_url: outputUrl, outputVideo: outputUrl }),
+      formatReturn: (outputUrl) => ({ video_url: outputUrl, outputVideo: outputUrl }),
     });
   },
 });

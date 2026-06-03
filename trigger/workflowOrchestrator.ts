@@ -8,7 +8,13 @@ import { task, metadata, logger, wait, tasks } from "@trigger.dev/sdk/v3";
 import { Prisma } from "@prisma/client";
 import { prisma } from "../lib/prisma";
 import { triggerOutboundWebhook } from "../lib/webhooks";
-import { parseMergeVideoTransition, resolveMergeVideoUrls } from "@galaxy/shared";
+import {
+  parseMergeVideoTransition,
+  resolveMergeAVAudioUrl,
+  resolveMergeAVAudioVolume,
+  resolveMergeAVVideoUrl,
+  resolveMergeVideoUrls,
+} from "@galaxy/shared";
 import {
   topologicalSort,
   getNodeWithDeps,
@@ -457,8 +463,9 @@ async function triggerReadyNodes(params: TriggerReadyNodesParams) {
         });
       } else if (node.type === "mergeAV") {
         await tasks.trigger("merge-av", {
-          videoUrl: (resolvedInputs["videoUrl"] as string) ?? "",
-          audioUrl: (resolvedInputs["audioUrl"] as string) ?? "",
+          videoUrl: resolveMergeAVVideoUrl(resolvedInputs),
+          audioUrl: resolveMergeAVAudioUrl(resolvedInputs),
+          audioVolume: resolveMergeAVAudioVolume(resolvedInputs),
           runId,
           nodeRunId: node.id,
           orchestratorRunId,

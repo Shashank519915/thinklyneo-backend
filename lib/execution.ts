@@ -138,6 +138,7 @@ function getHandleDataType(
     return "image";
   if (handleId === "in:images") return "image"; // gemini vision multi-input
   if (handleId === "in:video_urls") return "video"; // merge videos multi-input
+  if (handleId === "in:audio_volume") return "number";
   if (handleId.includes("Video") || handleId.includes("video")) return "video";
   if (handleId.includes("Audio") || handleId.includes("audio")) return "audio";
   if (handleId.includes("media") || handleId.includes("Media")) return "media";
