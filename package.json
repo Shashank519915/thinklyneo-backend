@@ -12,6 +12,7 @@
     "db:seed": "tsx prisma/seed.ts",
     "db:studio": "prisma studio",
     "mcp:start": "tsx scripts/mcp-server.ts",
+    "mcp:start-http": "tsx scripts/mcp-server-http.ts",
     "mcp:smoke": "tsx scripts/test-mcp-smoke.ts",
     "lint": "eslint .",
     "test": "vitest run",
