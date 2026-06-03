@@ -17,6 +17,7 @@ import {
 import { executeStubProvider } from "./executors";
 import type { ProviderExecutorContext } from "./provider-chain";
 import { runNodeTaskWithProviders } from "./task-coordination";
+import { buildXfadeFilterGraph } from "./merge-video-ffmpeg";
 
 interface MergeVideoPayload {
   videoUrls: string[];
@@ -33,8 +34,6 @@ interface MergeVideoFfmpegInput {
   transition: MergeVideoTransition;
   nodeRunId: string;
 }
-
-const XFADE_DURATION_SEC = 1;
 
 async function uploadFileToTransloadit(filePath: string, filename: string): Promise<string> {
   const buffer = fs.readFileSync(filePath);
@@ -127,13 +126,20 @@ function cleanupFile(filePath: string): void {
   }
 }
 
-function probeDurationSeconds(filePath: string): Promise<number> {
+function probeMedia(filePath: string): Promise<{ durationSec: number; hasAudio: boolean }> {
   return new Promise((resolve, reject) => {
     import("fluent-ffmpeg")
       .then(({ default: ffmpeg }) => {
         ffmpeg.ffprobe(filePath, (err, data) => {
           if (err) reject(err);
-          else resolve(data.format.duration ?? 0);
+          else {
+            const hasAudio =
+              data.streams?.some((s) => s.codec_type === "audio") ?? false;
+            resolve({
+              durationSec: data.format.duration ?? 0,
+              hasAudio,
+            });
+          }
         });
       })
       .catch(reject);
@@ -159,23 +165,29 @@ function runFfmpegXfade(
   outputPath: string,
   transition: "fade" | "dissolve"
 ): Promise<void> {
-  const xfadeName = transition === "dissolve" ? "dissolve" : "fade";
   return import("fluent-ffmpeg").then(async ({ default: ffmpeg }) => {
-    const durations = await Promise.all(inputPaths.map(probeDurationSeconds));
-    const filterParts: string[] = [];
-    let prevLabel = "0:v";
-    let offset = Math.max(0, durations[0]! - XFADE_DURATION_SEC);
+    const probes = await Promise.all(inputPaths.map(probeMedia));
+    const durations = probes.map((p) => p.durationSec);
+    const hasAudio = probes.map((p) => p.hasAudio);
+    const { filterComplex, includeAudio } = buildXfadeFilterGraph(
+      durations,
+      hasAudio,
+      transition
+    );
 
-    for (let i = 1; i < inputPaths.length; i++) {
-      const outLabel = i === inputPaths.length - 1 ? "vout" : `vx${i}`;
-      filterParts.push(
-        `[${prevLabel}][${i}:v]xfade=transition=${xfadeName}:duration=${XFADE_DURATION_SEC}:offset=${offset}[${outLabel}]`
-      );
-      prevLabel = outLabel;
-      offset += Math.max(0, durations[i]! - XFADE_DURATION_SEC);
+    const outputOptions = [
+      "-map",
+      "[vout]",
+      "-pix_fmt",
+      "yuv420p",
+      "-c:v",
+      "libx264",
+    ];
+    if (includeAudio) {
+      outputOptions.push("-map", "[aout]", "-c:a", "aac", "-b:a", "192k");
+    } else {
+      outputOptions.push("-an");
     }
-
-    const filterComplex = filterParts.join(";");
 
     return new Promise<void>((resolve, reject) => {
       let cmd = ffmpeg();
@@ -184,7 +196,7 @@ function runFfmpegXfade(
       }
       cmd
         .complexFilter(filterComplex)
-        .outputOptions(["-map", "[vout]", "-pix_fmt", "yuv420p", "-c:v", "libx264", "-an"])
+        .outputOptions(outputOptions)
         .output(outputPath)
         .on("end", () => resolve())
         .on("error", (err) => reject(err))
@@ -231,7 +243,7 @@ async function executeMergeVideoFfmpegProvider(
       ctx.appendLog(`[${config.id}] Running ffmpeg concat (copy)...`);
       await runFfmpegConcat(concatTxtPath, outputPath);
     } else {
-      ctx.appendLog(`[${config.id}] Running ffmpeg xfade (${transition})...`);
+      ctx.appendLog(`[${config.id}] Running ffmpeg xfade (${transition}, audio crossfade when tracks exist)...`);
       await runFfmpegXfade(inputPaths, outputPath, transition);
     }
 
