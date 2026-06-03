@@ -10,6 +10,7 @@ import { prisma } from "../lib/prisma";
 import { triggerOutboundWebhook } from "../lib/webhooks";
 import {
   parseMergeVideoTransition,
+  resolveActiveRunNodeIds,
   resolveMergeAVAudioUrl,
   resolveMergeAVAudioVolume,
   resolveMergeAVVideoUrl,
@@ -553,7 +554,11 @@ export const workflowOrchestratorTask = task({
       } else if (scope === "partial" && targetNodeIds?.length) {
         sortedNodes = getNodeWithDeps(nodes, edges, targetNodeIds, existingOutputsKeys);
       } else {
-        sortedNodes = topologicalSort(nodes, edges);
+        const runnableIds = resolveActiveRunNodeIds(nodes, edges, "full");
+        sortedNodes = topologicalSort(
+          nodes.filter((n) => runnableIds.has(n.id)),
+          edges
+        );
       }
 
       logger.info(`[Orchestrator] sortedNodes to execute: ${sortedNodes.map((n) => n.id).join(", ")}`);

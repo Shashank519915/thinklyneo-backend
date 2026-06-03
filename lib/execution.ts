@@ -5,6 +5,7 @@
  */
 
 import { type Node, type Edge } from "@xyflow/react";
+import { getRunnableNodeIds } from "@galaxy/shared";
 
 /** Single node outcome appended to workflow history + surfaced in nested UI rows. */
 export interface NodeRunResult {
@@ -412,7 +413,14 @@ export async function executeDAG(ctx: ExecutionContext): Promise<void> {
   let targetNodes: Node[];
 
   if (scope === "full") {
-    targetNodes = topologicalSort(nodes, edges);
+    const runnableIds = getRunnableNodeIds(
+      nodes.map((n) => ({ id: n.id, type: n.type ?? "" })),
+      edges.map((e) => ({ source: e.source, target: e.target }))
+    );
+    targetNodes = topologicalSort(
+      nodes.filter((n) => runnableIds.has(n.id)),
+      edges
+    );
   } else if (scope === "single" && targetNodeIds?.length) {
     // Only the target node + its transitive deps not yet computed
     targetNodes = getNodeWithDeps(nodes, edges, targetNodeIds, existingOutputs ?? {});
