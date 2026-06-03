@@ -3,6 +3,29 @@ import { parseMediaList } from "../media-list";
 import { NodeDefinition } from "../types/node.types";
 
 export const mergeVideoTransitionSchema = z.enum(["none", "fade", "dissolve"]);
+export type MergeVideoTransition = z.infer<typeof mergeVideoTransitionSchema>;
+
+const VIDEO_URL_RE = /\.(mp4|webm|mov|m4v|mkv)(\?|#|$)/i;
+
+/** Normalize dropdown or wired text (e.g. Request text_field) into a transition enum. */
+export function parseMergeVideoTransition(raw: unknown): MergeVideoTransition {
+  const s = String(raw ?? "")
+    .trim()
+    .toLowerCase()
+    .replace(/['"]/g, "");
+  if (s === "fade" || s === "dissolve" || s === "none") return s;
+  return "none";
+}
+
+/** Reject image/audio URLs mistaken for video inputs before FFmpeg runs. */
+export function isLikelyVideoUrl(url: string): boolean {
+  const trimmed = url.trim();
+  if (!trimmed.startsWith("http") && !trimmed.startsWith("data:")) return false;
+  if (/\.(webp|jpe?g|png|gif|svg|bmp|mp3|wav|ogg|m4a|aac|csv|pdf)(\?|#|$)/i.test(trimmed)) {
+    return false;
+  }
+  return VIDEO_URL_RE.test(trimmed) || trimmed.startsWith("data:video/");
+}
 
 export const mergeVideoInputSchema = z.object({
   video_urls: z
@@ -33,7 +56,7 @@ export function resolveMergeVideoUrls(resolvedInputs: Record<string, unknown>): 
     }
   }
 
-  return urls;
+  return urls.filter(isLikelyVideoUrl);
 }
 
 export const mergeVideoDefinition: NodeDefinition = {

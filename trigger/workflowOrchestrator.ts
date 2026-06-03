@@ -8,7 +8,7 @@ import { task, metadata, logger, wait, tasks } from "@trigger.dev/sdk/v3";
 import { Prisma } from "@prisma/client";
 import { prisma } from "../lib/prisma";
 import { triggerOutboundWebhook } from "../lib/webhooks";
-import { resolveMergeVideoUrls } from "@galaxy/shared";
+import { parseMergeVideoTransition, resolveMergeVideoUrls } from "@galaxy/shared";
 import {
   topologicalSort,
   getNodeWithDeps,
@@ -445,9 +445,7 @@ async function triggerReadyNodes(params: TriggerReadyNodesParams) {
         });
       } else if (node.type === "mergeVideo") {
         const videoUrls = resolveMergeVideoUrls(resolvedInputs);
-        const transitionRaw = resolvedInputs["transition"];
-        const transition =
-          transitionRaw === "fade" || transitionRaw === "dissolve" ? transitionRaw : "none";
+        const transition = parseMergeVideoTransition(resolvedInputs["transition"]);
         await tasks.trigger("merge-video", {
           videoUrls,
           transition,

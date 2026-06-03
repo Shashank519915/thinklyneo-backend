@@ -8,12 +8,15 @@ import * as path from "path";
 import * as os from "os";
 import { createHmac } from "crypto";
 import type { NodeProviderConfig } from "@galaxy/shared";
-import { mergeVideoDefinition } from "@galaxy/shared";
+import {
+  isLikelyVideoUrl,
+  mergeVideoDefinition,
+  parseMergeVideoTransition,
+  type MergeVideoTransition,
+} from "@galaxy/shared";
 import { executeStubProvider } from "./executors";
 import type { ProviderExecutorContext } from "./provider-chain";
 import { runNodeTaskWithProviders } from "./task-coordination";
-
-export type MergeVideoTransition = "none" | "fade" | "dissolve";
 
 interface MergeVideoPayload {
   videoUrls: string[];
@@ -32,6 +35,11 @@ interface MergeVideoFfmpegInput {
 }
 
 const XFADE_DURATION_SEC = 1;
+
+async function uploadFileToTransloadit(filePath: string, filename: string): Promise<string> {
+  const buffer = fs.readFileSync(filePath);
+  return uploadBufferToTransloadit(buffer, filename);
+}
 
 async function uploadBufferToTransloadit(buffer: Buffer, filename: string): Promise<string> {
   const authKey = process.env.TRANSLOADIT_KEY!;
@@ -192,8 +200,14 @@ async function executeMergeVideoFfmpegProvider(
 ): Promise<string> {
   ctx.appendLog(`[${config.id}] Starting video merge (${input.transition})...`);
   const { videoUrls, transition, nodeRunId } = input;
-  if (videoUrls.length < 2) {
-    throw new Error("At least two video URLs are required to merge");
+  const validUrls = videoUrls.filter(isLikelyVideoUrl);
+  if (validUrls.length < 2) {
+    const sample = videoUrls[0] ? String(videoUrls[0]).slice(0, 120) : "";
+    throw new Error(
+      `At least two valid video URLs (.mp4, .webm, .mov) are required. Got ${videoUrls.length} input(s)` +
+        (sample ? ` (e.g. ${sample}…)` : "") +
+        `. Images (.webp/.jpg) cannot be merged as video.`
+    );
   }
 
   const tmpDir = os.tmpdir();
@@ -202,10 +216,10 @@ async function executeMergeVideoFfmpegProvider(
   const outputPath = path.join(tmpDir, `merged_${nodeRunId}.mp4`);
 
   try {
-    ctx.appendLog(`[${config.id}] Downloading ${videoUrls.length} video(s)...`);
-    for (let i = 0; i < videoUrls.length; i++) {
+    ctx.appendLog(`[${config.id}] Downloading ${validUrls.length} video(s)...`);
+    for (let i = 0; i < validUrls.length; i++) {
       const p = path.join(tmpDir, `input_${nodeRunId}_${i}.mp4`);
-      await downloadFile(videoUrls[i]!, p);
+      await downloadFile(validUrls[i]!, p);
       inputPaths.push(p);
     }
 
@@ -221,8 +235,7 @@ async function executeMergeVideoFfmpegProvider(
       await runFfmpegXfade(inputPaths, outputPath, transition);
     }
 
-    const mergedBuffer = fs.readFileSync(outputPath);
-    const outputUrl = await uploadBufferToTransloadit(mergedBuffer, `merged_${nodeRunId}.mp4`);
+    const outputUrl = await uploadFileToTransloadit(outputPath, `merged_${nodeRunId}.mp4`);
     ctx.appendLog(`[${config.id}] Success: merged video at ${outputUrl}`);
     return outputUrl;
   } finally {
@@ -235,18 +248,28 @@ async function executeMergeVideoFfmpegProvider(
 export const mergeVideoTask = task({
   id: "merge-video",
   maxDuration: 300,
+  /** xfade + libx264 needs more RAM than concat copy on default small-1x (512MB). */
+  machine: "medium-2x",
+  retry: {
+    outOfMemory: {
+      machine: "large-1x",
+    },
+  },
   run: async (payload: MergeVideoPayload) => {
     const {
       videoUrls,
-      transition = "none",
+      transition: transitionRaw = "none",
       runId,
       nodeRunId,
       orchestratorRunId,
       waitpointTokenId,
       workflowId,
     } = payload;
+    const transition = parseMergeVideoTransition(transitionRaw);
 
-    console.log(`[MergeVideoTask] Starting merge-video (nodeRunId: ${nodeRunId}, videos: ${videoUrls.length})`);
+    console.log(
+      `[MergeVideoTask] Starting merge-video (nodeRunId: ${nodeRunId}, videos: ${videoUrls.length}, transition: ${transition})`
+    );
 
     return runNodeTaskWithProviders({
       taskLabel: "MergeVideoTask",
