@@ -1,10 +1,32 @@
 {
   "name": "@galaxy/shared",
   "version": "1.0.0",
+  "description": "Shared node definitions, Zod schemas, and types for Galaxy (backend-owned source of truth).",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "require": "./dist/index.js",
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "files": [
+    "dist",
+    "src"
+  ],
   "scripts": {
-    "build": "tsc"
+    "build": "tsc",
+    "prepublishOnly": "tsc"
+  },
+  "publishConfig": {
+    "registry": "https://npm.pkg.github.com",
+    "access": "restricted"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Shashank519915/galaxy-temp-backend.git",
+    "directory": "shared"
   },
   "dependencies": {
     "zod": "^3.25.76"
