@@ -11,9 +11,21 @@ export interface OpenRouterExecutorInput {
   model?: string;
   systemPrompt?: string | null;
   images?: string[];
+  video_urls?: string[];
+  audio_urls?: string[];
   temperature?: number;
   maxTokens?: number;
   topP?: number;
+  topK?: number;
+  frequencyPenalty?: number;
+  presencePenalty?: number;
+  repetitionPenalty?: number;
+  minP?: number;
+  topA?: number;
+  seed?: number;
+  reasoning?: boolean;
+  stop?: string;
+  response_format?: boolean;
 }
 
 function resolveOpenRouterModel(config: NodeProviderConfig, input: OpenRouterExecutorInput): string {
@@ -63,6 +75,36 @@ export async function executeOpenRouterProvider(
 
   messages.push({ role: "user", content: userContent });
 
+  const stopSequences =
+    typeof input.stop === "string" && input.stop.trim()
+      ? input.stop
+          .split(",")
+          .map((s) => s.trim())
+          .filter(Boolean)
+      : undefined;
+
+  const body: Record<string, unknown> = {
+    model: targetModel,
+    messages,
+    temperature: input.temperature ?? 0.5,
+    max_tokens: input.maxTokens ?? 1024,
+    top_p: input.topP ?? 1,
+  };
+  if (input.topK != null && input.topK > 0) body.top_k = input.topK;
+  if (input.frequencyPenalty != null) body.frequency_penalty = input.frequencyPenalty;
+  if (input.presencePenalty != null) body.presence_penalty = input.presencePenalty;
+  if (input.repetitionPenalty != null) body.repetition_penalty = input.repetitionPenalty;
+  if (input.minP != null && input.minP > 0) body.min_p = input.minP;
+  if (input.topA != null && input.topA > 0) body.top_a = input.topA;
+  if (input.seed != null && input.seed > 0) body.seed = input.seed;
+  if (stopSequences?.length) body.stop = stopSequences;
+  if (input.response_format) {
+    body.response_format = { type: "json_object" };
+  }
+  if (input.reasoning) {
+    body.reasoning = { enabled: true };
+  }
+
   const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
     method: "POST",
     headers: {
@@ -71,13 +113,7 @@ export async function executeOpenRouterProvider(
       "HTTP-Referer": "https://nextflow-workflow.vercel.app",
       "X-Title": "NextFlow Workflow Builder",
     },
-    body: JSON.stringify({
-      model: targetModel,
-      messages,
-      temperature: input.temperature ?? 1.0,
-      max_tokens: input.maxTokens ?? 2048,
-      top_p: input.topP ?? 0.95,
-    }),
+    body: JSON.stringify(body),
     signal: ctx.signal,
   });
 

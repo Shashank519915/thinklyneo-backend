@@ -17,9 +17,21 @@ interface OpenRouterPayload {
   prompt: string;
   systemPrompt?: string;
   images?: string[];
+  video_urls?: string[];
+  audio_urls?: string[];
   temperature?: number;
   maxTokens?: number;
   topP?: number;
+  topK?: number;
+  frequencyPenalty?: number;
+  presencePenalty?: number;
+  repetitionPenalty?: number;
+  minP?: number;
+  topA?: number;
+  seed?: number;
+  reasoning?: boolean;
+  stop?: string;
+  response_format?: boolean;
   runId: string;
   nodeRunId: string;
   orchestratorRunId?: string;
@@ -35,9 +47,21 @@ export const openrouterTask = task({
       prompt,
       systemPrompt,
       images = [],
-      temperature = 1.0,
-      maxTokens = 2048,
-      topP = 0.95,
+      video_urls = [],
+      audio_urls = [],
+      temperature = 0.5,
+      maxTokens = 1024,
+      topP = 1,
+      topK,
+      frequencyPenalty,
+      presencePenalty,
+      repetitionPenalty,
+      minP,
+      topA,
+      seed,
+      reasoning,
+      stop,
+      response_format,
       runId,
       nodeRunId,
       orchestratorRunId,
@@ -51,7 +75,26 @@ export const openrouterTask = task({
       taskLabel: "OpenRouterTask",
       definition: openrouterLlmDefinition,
       coordination: { runId, nodeRunId, orchestratorRunId, waitpointTokenId, workflowId },
-      input: { prompt, systemPrompt, images, temperature, maxTokens, topP },
+      input: {
+        prompt,
+        systemPrompt,
+        images,
+        video_urls,
+        audio_urls,
+        temperature,
+        maxTokens,
+        topP,
+        topK,
+        frequencyPenalty,
+        presencePenalty,
+        repetitionPenalty,
+        minP,
+        topA,
+        seed,
+        reasoning,
+        stop,
+        response_format,
+      },
       executors: {
         openrouter: executeOpenRouterProvider,
         stub: executeStubProvider,

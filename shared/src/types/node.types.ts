@@ -26,7 +26,7 @@ export interface ElementSubField {
 export interface NodeParameter {
   key: string;
   label: string;
-  type: "text" | "textarea" | "number" | "slider" | "select" | "boolean" | "file-upload" | "image-array" | "video-array" | "element-array";
+  type: "text" | "textarea" | "number" | "slider" | "select" | "boolean" | "file-upload" | "image-array" | "video-array" | "audio-array" | "element-array";
   required?: boolean;
   group: "primary" | "advanced" | "image-mode" | "settings";
   defaultValue?: any;

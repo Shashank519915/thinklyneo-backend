@@ -363,20 +363,30 @@ async function executeNode(
     if (!prompt || typeof prompt !== "string" || !prompt.trim()) {
       return { output: null, error: "No prompt connected or prompt is empty" };
     }
-    const images = (resolvedInputs["images"] as unknown[]) ?? [];
-    const validImages: string[] = [];
-    for (const img of images) {
-      if (typeof img === "string" && img.length > 0) {
-        const splitUrls = img.split(",").map((s) => s.trim()).filter(Boolean);
-        validImages.push(...splitUrls);
+    const collectUrls = (key: string, legacyKey?: string): string[] => {
+      const raw =
+        resolvedInputs[key] ??
+        (legacyKey ? resolvedInputs[legacyKey] : undefined) ??
+        data.inputs?.[key as keyof typeof data.inputs] ??
+        (legacyKey ? data.inputs?.[legacyKey as keyof typeof data.inputs] : undefined);
+      const out: string[] = [];
+      const items = Array.isArray(raw) ? raw : raw ? [raw] : [];
+      for (const item of items) {
+        if (typeof item === "string" && item.length > 0) {
+          out.push(...item.split(",").map((s) => s.trim()).filter(Boolean));
+        }
       }
-    }
+      return out;
+    };
     const body = {
       prompt,
       systemPrompt: resolvedInputs["systemPrompt"] ?? data.inputs?.systemPrompt ?? null,
-      images: validImages,
-      temperature: data.inputs?.temperature ?? 1.0,
-      maxTokens: data.inputs?.maxTokens ?? 2048,
+      images: collectUrls("image_urls", "images"),
+      video_urls: collectUrls("video_urls", "video"),
+      audio_urls: collectUrls("audio_urls", "audio"),
+      temperature: data.inputs?.temperature ?? 0.5,
+      maxTokens: data.inputs?.maxTokens ?? 1024,
+      topP: data.inputs?.topP ?? 1,
       runId,
       nodeRunId: node.id,
     };

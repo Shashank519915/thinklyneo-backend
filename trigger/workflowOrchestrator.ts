@@ -518,22 +518,47 @@ async function triggerReadyNodes(params: TriggerReadyNodesParams) {
           workflowId,
         });
       } else if (node.type === "openRouter") {
-        const images = (resolvedInputs["images"] as unknown[]) ?? [];
-        const validImages: string[] = [];
-        for (const img of images) {
-          if (typeof img === "string" && img.length > 0) {
-            const splitUrls = img.split(",").map((s) => s.trim()).filter(Boolean);
-            validImages.push(...splitUrls);
+        const collectUrls = (key: string, legacyKey?: string): string[] => {
+          const raw =
+            (resolvedInputs[key] as unknown) ??
+            (legacyKey ? (resolvedInputs[legacyKey] as unknown) : undefined) ??
+            (node.data as any).inputs?.[key] ??
+            (legacyKey ? (node.data as any).inputs?.[legacyKey] : undefined);
+          const out: string[] = [];
+          const items = Array.isArray(raw) ? raw : raw ? [raw] : [];
+          for (const item of items) {
+            if (typeof item === "string" && item.length > 0) {
+              out.push(
+                ...item.split(",").map((s) => s.trim()).filter(Boolean),
+              );
+            }
           }
-        }
-        
+          return out;
+        };
+
+        const inputs = (node.data as any).inputs ?? {};
         await tasks.trigger("openrouter-inference", {
           prompt: resolvedInputs["prompt"] ?? null,
-          systemPrompt: (resolvedInputs["systemPrompt"] as string) ?? (node.data as any).inputs?.systemPrompt ?? undefined,
-          images: validImages,
-          temperature: (node.data as any).inputs?.temperature ?? 1.0,
-          maxTokens: (node.data as any).inputs?.maxTokens ?? 2048,
-          topP: (node.data as any).inputs?.topP ?? 0.95,
+          systemPrompt:
+            (resolvedInputs["systemPrompt"] as string) ??
+            inputs.systemPrompt ??
+            undefined,
+          images: collectUrls("image_urls", "images"),
+          video_urls: collectUrls("video_urls", "video"),
+          audio_urls: collectUrls("audio_urls", "audio"),
+          temperature: inputs.temperature ?? 0.5,
+          maxTokens: inputs.maxTokens ?? 1024,
+          topP: inputs.topP ?? 1,
+          topK: inputs.topK,
+          frequencyPenalty: inputs.frequencyPenalty,
+          presencePenalty: inputs.presencePenalty,
+          repetitionPenalty: inputs.repetitionPenalty,
+          minP: inputs.minP,
+          topA: inputs.topA,
+          seed: inputs.seed,
+          reasoning: inputs.reasoning,
+          stop: inputs.stop,
+          response_format: inputs.response_format,
           runId,
           nodeRunId: node.id,
           orchestratorRunId,
