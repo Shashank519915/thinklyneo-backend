@@ -41,6 +41,7 @@ export const cropImageDefinition: NodeDefinition = {
     {
       key: "x",
       label: "X Position (%)",
+      tooltip: "Horizontal start position of the crop region as a percentage of the image width",
       type: "slider",
       defaultValue: 0,
       min: 0,
@@ -55,6 +56,7 @@ export const cropImageDefinition: NodeDefinition = {
     {
       key: "y",
       label: "Y Position (%)",
+      tooltip: "Vertical start position of the crop region as a percentage of the image height",
       type: "slider",
       defaultValue: 0,
       min: 0,
@@ -69,6 +71,7 @@ export const cropImageDefinition: NodeDefinition = {
     {
       key: "w",
       label: "Width (%)",
+      tooltip: "Width of the crop region as a percentage of the image width",
       type: "slider",
       defaultValue: 100,
       min: 1,
@@ -83,6 +86,7 @@ export const cropImageDefinition: NodeDefinition = {
     {
       key: "h",
       label: "Height (%)",
+      tooltip: "Height of the crop region as a percentage of the image height",
       type: "slider",
       defaultValue: 100,
       min: 1,
