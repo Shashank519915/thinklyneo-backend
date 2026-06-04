@@ -1,6 +1,6 @@
 {
   "name": "@shashank519915/shared",
-  "version": "1.0.3",
+  "version": "1.0.4",
   "description": "Shared node definitions, Zod schemas, and types for Galaxy (backend-owned source of truth).",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",

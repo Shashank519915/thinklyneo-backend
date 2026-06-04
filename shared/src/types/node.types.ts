@@ -1,12 +1,28 @@
 import { z } from "zod";
 import type { NodeProviderConfig } from "./provider.types";
 
+export interface ElementSubField {
+  key: string;
+  label: string;
+  type: "file-upload-single" | "file-upload-multi";
+  required?: boolean;
+  accept: "image/*" | "video/*";
+  /** Max number of files (for multi). */
+  maxCount?: number;
+  /** Shown below upload button as "Upload requirements" hint with tooltip. */
+  uploadRequirements?: string;
+  handle?: {
+    type: "text" | "image" | "video" | "audio" | "file";
+    color: string;
+  };
+}
+
 export interface NodeParameter {
   key: string;
   label: string;
-  type: "text" | "textarea" | "number" | "slider" | "select" | "boolean" | "file-upload" | "image-array" | "video-array";
+  type: "text" | "textarea" | "number" | "slider" | "select" | "boolean" | "file-upload" | "image-array" | "video-array" | "element-array";
   required?: boolean;
-  group: "primary" | "advanced";
+  group: "primary" | "advanced" | "image-mode" | "settings";
   defaultValue?: any;
   min?: number;
   max?: number;
@@ -18,8 +34,11 @@ export interface NodeParameter {
   tooltip?: string;
   /** `magica-side-label` = label left, control right (Merge A/V media rows).
    *  `crop-overlay-preview` = after this file-upload param, render a live crop overlay
-   *  driven by sibling slider params x/y/w/h (Crop Image node). */
-  uiVariant?: "magica-side-label" | "magica-volume-row" | "crop-overlay-preview";
+   *   driven by sibling slider params x/y/w/h (Crop Image node).
+   *  `kling-image-upload` = side-label layout for start/end frame image uploads (label + button + add-to-request). */
+  uiVariant?: "magica-side-label" | "magica-volume-row" | "crop-overlay-preview" | "kling-image-upload";
+  /** Sub-fields for element-array type (e.g. Kling v3 Elements). */
+  elementFields?: ElementSubField[];
   handle?: {
     type: "text" | "image" | "video" | "audio" | "file";
     color: string;
