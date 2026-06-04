@@ -48,3 +48,26 @@ export function estimateWorkflowCostMillions(
 ): number {
   return estimateWorkflowCostMicrocredits(nodes) / 1_000_000;
 }
+
+/** Default `data.inputs` for a new canvas node — mirrors GenericNode reset logic. */
+export function buildDefaultNodeInputs(
+  def: NodeDefinition,
+): Record<string, unknown> {
+  const inputs: Record<string, unknown> = {};
+  for (const param of def.inputs) {
+    if (param.defaultValue !== undefined) {
+      inputs[param.key] = param.defaultValue;
+    } else if (
+      param.type === "image-array" ||
+      param.type === "video-array" ||
+      param.type === "audio-array"
+    ) {
+      inputs[param.key] = [];
+    } else if (param.type === "boolean") {
+      inputs[param.key] = false;
+    } else {
+      inputs[param.key] = null;
+    }
+  }
+  return inputs;
+}
