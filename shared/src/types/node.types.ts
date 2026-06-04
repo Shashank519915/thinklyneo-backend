@@ -4,7 +4,7 @@ import type { NodeProviderConfig } from "./provider.types";
 export interface NodeParameter {
   key: string;
   label: string;
-  type: "text" | "textarea" | "number" | "slider" | "select" | "file-upload" | "image-array" | "video-array";
+  type: "text" | "textarea" | "number" | "slider" | "select" | "boolean" | "file-upload" | "image-array" | "video-array";
   required?: boolean;
   group: "primary" | "advanced";
   defaultValue?: any;
@@ -12,6 +12,8 @@ export interface NodeParameter {
   max?: number;
   step?: number;
   options?: Array<{ value: string; label: string }>;
+  /** Placeholder text for text/textarea inputs. */
+  placeholder?: string;
   /** Info icon tooltip on the field label (Magica-style). */
   tooltip?: string;
   /** `magica-side-label` = label left, control right (Merge A/V media rows).
