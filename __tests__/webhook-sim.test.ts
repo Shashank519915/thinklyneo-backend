@@ -7,7 +7,7 @@ import {
   STUB_DEMO_IMAGE_URL,
   STUB_DEMO_VIDEO_MP4_URL,
   type NodeProviderConfig,
-} from "@galaxy/shared";
+} from "@shashank519915/shared";
 
 const mockTasksTrigger = vi.fn();
 const mockCreateToken = vi.fn();
@@ -29,7 +29,11 @@ vi.mock("@trigger.dev/sdk/v3", () => ({
 }));
 
 import { executeWebhookSimProvider } from "../trigger/executors";
-import { simulateCallbackTask } from "../trigger/simulateCallbackTask";
+import { simulateCallbackTask as _simulateCallbackTask } from "../trigger/simulateCallbackTask";
+
+// The @trigger.dev/sdk/v3 mock makes task(def) => def, so .run() exists at runtime.
+// Cast to any so TypeScript doesn't complain about the missing Task<> wrapper methods.
+const simulateCallbackTask = _simulateCallbackTask as any;
 
 beforeEach(() => {
   vi.clearAllMocks();

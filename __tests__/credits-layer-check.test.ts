@@ -28,7 +28,7 @@ vi.mock("../lib/prisma", () => ({
 }));
 
 import { checkNextLayerWithinHold } from "../lib/credits";
-import { gptImage2Definition, klingV3Definition } from "@galaxy/shared";
+import { gptImage2Definition, klingV3Definition } from "@shashank519915/shared";
 
 describe("checkNextLayerWithinHold", () => {
   beforeEach(() => {

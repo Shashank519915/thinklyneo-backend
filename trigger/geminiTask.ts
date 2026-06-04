@@ -5,7 +5,7 @@
  */
 
 import { task } from "@trigger.dev/sdk/v3";
-import { geminiDefinition } from "@galaxy/shared";
+import { geminiDefinition } from "@shashank519915/shared";
 import {
   executeOpenRouterProvider,
   executeStubProvider,

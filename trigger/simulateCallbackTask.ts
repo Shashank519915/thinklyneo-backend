@@ -1,4 +1,4 @@
-import { STUB_DEMO_IMAGE_URL, STUB_DEMO_VIDEO_MP4_URL } from "@galaxy/shared";
+import { STUB_DEMO_IMAGE_URL, STUB_DEMO_VIDEO_MP4_URL } from "@shashank519915/shared";
 import { task, wait, tasks } from "@trigger.dev/sdk/v3";
 
 interface SimulateCallbackPayload {

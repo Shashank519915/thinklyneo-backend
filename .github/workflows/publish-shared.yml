@@ -1,4 +1,4 @@
-name: Publish @galaxy/shared
+name: Publish @shashank519915/shared
 
 # Fires only when you push a tag like: shared-v1.2.3
 # To release: git tag shared-v1.0.1 && git push origin shared-v1.0.1
@@ -25,18 +25,19 @@ jobs:
         with:
           node-version: "22"
           cache: "pnpm"
-          # Point npm/pnpm at GitHub Packages for the @galaxy scope
           registry-url: "https://npm.pkg.github.com"
-          scope: "@galaxy"
+          scope: "@shashank519915"
 
       # Install deps (builds shared too via workspace)
       - run: pnpm install --frozen-lockfile
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       # Build the shared package explicitly to make sure dist/ is fresh
-      - run: pnpm --filter @galaxy/shared build
+      - run: pnpm --filter @shashank519915/shared build
 
       # Publish. The GITHUB_TOKEN is automatically available in Actions.
-      - name: Publish @galaxy/shared to GitHub Packages
-        run: pnpm publish --filter @galaxy/shared --no-git-checks
+      - name: Publish @shashank519915/shared to GitHub Packages
+        run: pnpm publish --filter @shashank519915/shared --no-git-checks
         env:
           NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

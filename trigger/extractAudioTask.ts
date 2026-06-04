@@ -7,13 +7,13 @@ import * as fs from "fs";
 import * as path from "path";
 import * as os from "os";
 import { createHmac } from "crypto";
-import type { NodeProviderConfig } from "@galaxy/shared";
+import type { NodeProviderConfig } from "@shashank519915/shared";
 import {
   extractAudioDefinition,
   extractAudioFfmpegConfig,
   parseExtractAudioFormat,
   type ExtractAudioFormat,
-} from "@galaxy/shared";
+} from "@shashank519915/shared";
 import { executeStubProvider } from "./executors";
 import type { ProviderExecutorContext } from "./provider-chain";
 import { runNodeTaskWithProviders } from "./task-coordination";

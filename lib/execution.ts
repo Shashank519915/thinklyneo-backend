@@ -5,7 +5,7 @@
  */
 
 import { type Node, type Edge } from "@xyflow/react";
-import { getRunnableNodeIds } from "@galaxy/shared";
+import { getRunnableNodeIds } from "@shashank519915/shared";
 
 /** Single node outcome appended to workflow history + surfaced in nested UI rows. */
 export interface NodeRunResult {

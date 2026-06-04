@@ -68,9 +68,13 @@ Sequence diagrams: [README](../README.md#execution-flow).
 
 ## Credits lifecycle
 
-`estimateWorkflowCost` → `placeCreditHold` (transaction) → per-node `creditCost` → `reconcileWorkflowCredits`.
+`estimateWorkflowCost` → hold in execute/v1 transaction → per-node `creditCost` on success → `reconcileWorkflowCredits` at DAG end (or credit-abort / reconcile route).
+
+Mid-run: `checkNextLayerWithinHold` before each layer.
 
 Registry: `shared/src/definitions/registry.ts`.
+
+**Full audit + verification:** [interview/07-CREDIT-SYSTEM-AUDIT.md](../../interview/07-CREDIT-SYSTEM-AUDIT.md) (Vitest 32/32, manual checklist, known gaps).
 
 ---
 

@@ -2,7 +2,7 @@
  * Generic provider fallback chain - reads provider order from NodeDefinition config.
  */
 
-import type { NodeDefinition, NodeProviderConfig, ProviderKind } from "@galaxy/shared";
+import type { NodeDefinition, NodeProviderConfig, ProviderKind } from "@shashank519915/shared";
 import { callWithDurableTimeout } from "./utils";
 
 export interface ProviderAttempt {

@@ -55,7 +55,7 @@ import { POST as createWorkflow } from "@/app/api/workflows/route";
 import { POST as importWorkflow } from "@/app/api/workflows/import/route";
 import { POST as executeWorkflow } from "@/app/api/workflows/[id]/execute/route";
 
-const mockAuth = auth as ReturnType<typeof vi.fn>;
+const mockAuth = auth as unknown as ReturnType<typeof vi.fn>;
 const mockUserUpsert = prisma.user.upsert as ReturnType<typeof vi.fn>;
 const mockWfCreate = prisma.workflow.create as ReturnType<typeof vi.fn>;
 const mockWfFindUnique = prisma.workflow.findUnique as ReturnType<typeof vi.fn>;

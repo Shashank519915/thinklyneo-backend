@@ -6,7 +6,7 @@ import {
   validateWorkflowInputsSync,
   type InputLimitError,
   type MediaUrlSizeCheck,
-} from "@galaxy/shared";
+} from "@shashank519915/shared";
 
 export type { InputLimitError };
 

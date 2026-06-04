@@ -7,7 +7,7 @@ import {
   geminiDefinition,
   extractAudioDefinition,
   mergeAVDefinition,
-} from "@galaxy/shared";
+} from "@shashank519915/shared";
 
 /**
  * Pure re-implementation of `estimateWorkflowCost` without importing Prisma-backed `lib/credits.ts`.
@@ -31,7 +31,7 @@ function estimateWorkflowCost(nodes: { type: string }[]): number {
   return total;
 }
 
-describe("credit estimation — base costs from @galaxy/shared definitions", () => {
+describe("credit estimation — base costs from @shashank519915/shared definitions", () => {
   it("gptImage2 has a positive base cost", () => {
     expect((gptImage2Definition.credits?.base ?? 0)).toBeGreaterThan(0);
   });

@@ -5,7 +5,7 @@
  */
 
 import { task } from "@trigger.dev/sdk/v3";
-import { klingV3Definition } from "@galaxy/shared";
+import { klingV3Definition } from "@shashank519915/shared";
 import {
   executeStubProvider,
   executeWebhookSimProvider,

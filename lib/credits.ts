@@ -3,7 +3,7 @@
  */
 
 import { prisma } from "./prisma";
-import { estimateWorkflowCostMicrocredits } from "@galaxy/shared";
+import { estimateWorkflowCostMicrocredits } from "@shashank519915/shared";
 
 const INITIAL_GRANT_MICROCREDITS = 100000000; // 100.00 credits
 

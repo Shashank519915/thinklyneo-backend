@@ -16,7 +16,7 @@ import {
   resolveMergeAVAudioVolume,
   resolveMergeAVVideoUrl,
   resolveMergeVideoUrls,
-} from "@galaxy/shared";
+} from "@shashank519915/shared";
 import {
   topologicalSort,
   getNodeWithDeps,

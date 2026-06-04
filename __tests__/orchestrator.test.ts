@@ -95,7 +95,11 @@ vi.mock("../lib/credits", () => ({
 }));
 
 import { notifyCoordinator } from "../trigger/utils";
-import { workflowOrchestratorTask } from "../trigger/workflowOrchestrator";
+import { workflowOrchestratorTask as _workflowOrchestratorTask } from "../trigger/workflowOrchestrator";
+
+// The @trigger.dev/sdk/v3 mock makes task(def) => def, so .run() exists at runtime.
+// Cast to any so TypeScript doesn't complain about the missing Task<> wrapper methods.
+const workflowOrchestratorTask = _workflowOrchestratorTask as any;
 
 const WORKFLOW_ID = "wf_test";
 const RUN_ID = "run_test";

@@ -2,7 +2,7 @@
 # Docs: https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners
 
 # -----------------------------------------------------------------------
-# @galaxy/shared — backend is the authoritative source of truth.
+# @shashank519915/shared — backend is the authoritative source of truth.
 # Any change to node definitions, types, or the registry MUST be reviewed
 # by the backend team. This is the enforcement gate that prevents frontend
 # contributors from silently modifying node config.

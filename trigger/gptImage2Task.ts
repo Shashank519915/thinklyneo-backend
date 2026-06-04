@@ -5,7 +5,7 @@
  */
 
 import { task } from "@trigger.dev/sdk/v3";
-import { gptImage2Definition } from "@galaxy/shared";
+import { gptImage2Definition } from "@shashank519915/shared";
 import {
   executeStubProvider,
   executeWebhookSimProvider,

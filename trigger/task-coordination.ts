@@ -2,7 +2,7 @@
  * Shared coordination helpers for node Trigger tasks.
  */
 
-import type { NodeDefinition, ProviderKind } from "@galaxy/shared";
+import type { NodeDefinition, ProviderKind } from "@shashank519915/shared";
 import { notifyCoordinator } from "./utils";
 import {
   ProviderChainExhaustedError,

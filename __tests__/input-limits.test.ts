@@ -3,7 +3,7 @@ import {
   validateWorkflowInputsSync,
   estimateWorkflowCostMillions,
   PLATFORM_LIMITS,
-} from "@galaxy/shared";
+} from "@shashank519915/shared";
 
 describe("estimateWorkflowCostMillions", () => {
   it("sums all 8 executable node types", () => {

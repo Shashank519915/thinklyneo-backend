@@ -19,11 +19,11 @@ jobs:
           node-version: "22"
           cache: "pnpm"
           registry-url: "https://npm.pkg.github.com"
-          scope: "@galaxy"
+          scope: "@shashank519915"
       - run: pnpm install --frozen-lockfile
         env:
           NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      - run: pnpm --filter @galaxy/shared build
+      - run: pnpm --filter @shashank519915/shared build
       - run: pnpm typecheck
       - run: pnpm lint
       - run: pnpm test

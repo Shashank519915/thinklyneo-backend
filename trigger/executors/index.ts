@@ -3,7 +3,7 @@
  */
 
 import { wait, tasks } from "@trigger.dev/sdk/v3";
-import type { NodeProviderConfig } from "@galaxy/shared";
+import type { NodeProviderConfig } from "@shashank519915/shared";
 import type { ProviderExecutorContext } from "../provider-chain";
 
 export interface OpenRouterExecutorInput {

@@ -7,7 +7,7 @@ import { auth } from "@clerk/nextjs/server";
 import { NextResponse } from "next/server";
 import { createHmac } from "crypto";
 import sharp from "sharp";
-import { maxUploadBytesForMime, PLATFORM_LIMITS } from "@galaxy/shared";
+import { maxUploadBytesForMime, PLATFORM_LIMITS } from "@shashank519915/shared";
 
 function extractTransloaditUrl(
   uploads?: Array<{ ssl_url?: string; url?: string }>,

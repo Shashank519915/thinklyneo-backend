@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import type { NodeDefinition } from "@galaxy/shared";
+import type { NodeDefinition } from "@shashank519915/shared";
 
 vi.mock("../trigger/utils", () => ({
   callWithDurableTimeout: async <T>(

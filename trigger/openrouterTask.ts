@@ -5,7 +5,7 @@
  */
 
 import { task } from "@trigger.dev/sdk/v3";
-import { openrouterLlmDefinition } from "@galaxy/shared";
+import { openrouterLlmDefinition } from "@shashank519915/shared";
 import {
   executeOpenRouterProvider,
   executeStubProvider,
