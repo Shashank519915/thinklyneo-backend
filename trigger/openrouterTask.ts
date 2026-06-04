@@ -44,6 +44,7 @@ export const openrouterTask = task({
   maxDuration: 120,
   run: async (payload: OpenRouterPayload) => {
     const {
+      model,
       prompt,
       systemPrompt,
       images = [],
@@ -76,6 +77,7 @@ export const openrouterTask = task({
       definition: openrouterLlmDefinition,
       coordination: { runId, nodeRunId, orchestratorRunId, waitpointTokenId, workflowId },
       input: {
+        model,
         prompt,
         systemPrompt,
         images,

@@ -26,6 +26,10 @@ import {
   type SerializedEdge,
 } from "./orchestrator-utils";
 import { checkNextLayerWithinHold, reconcileWorkflowCredits, getRunHoldAmount } from "../lib/credits";
+import {
+  buildGeminiInferencePayload,
+  buildOpenRouterInferencePayload,
+} from "./llm-payloads";
 
 /** Returns the shared Prisma client singleton. */
 function getPrisma() {
@@ -494,100 +498,27 @@ async function triggerReadyNodes(params: TriggerReadyNodesParams) {
           workflowId,
         });
       } else if (node.type === "gemini") {
-        const collectGeminiUrls = (key: string, legacyKey?: string): string[] => {
-          const raw =
-            (resolvedInputs[key] as unknown) ??
-            (legacyKey ? (resolvedInputs[legacyKey] as unknown) : undefined) ??
-            (node.data as any).inputs?.[key] ??
-            (legacyKey ? (node.data as any).inputs?.[legacyKey] : undefined);
-          const out: string[] = [];
-          const items = Array.isArray(raw) ? raw : raw ? [raw] : [];
-          for (const item of items) {
-            if (typeof item === "string" && item.length > 0) {
-              out.push(...item.split(",").map((s: string) => s.trim()).filter(Boolean));
-            }
-          }
-          return out;
-        };
-
-        const geminiInputs = (node.data as any).inputs ?? {};
-        await tasks.trigger("gemini-inference", {
-          model: (node.data as any).model ?? "gemini-2.5-flash",
-          prompt: resolvedInputs["prompt"] ?? null,
-          systemPrompt:
-            (resolvedInputs["systemPrompt"] as string) ??
-            geminiInputs.systemPrompt ??
-            undefined,
-          image_urls: collectGeminiUrls("image_urls", "images"),
-          video_urls: collectGeminiUrls("video_urls", "video"),
-          audio_urls: collectGeminiUrls("audio_urls", "audio"),
-          temperature: geminiInputs.temperature ?? 1.0,
-          maxTokens: geminiInputs.maxTokens ?? 2048,
-          reasoning: geminiInputs.reasoning,
-          topP: geminiInputs.topP ?? 0.95,
-          topK: geminiInputs.topK,
-          frequencyPenalty: geminiInputs.frequencyPenalty,
-          presencePenalty: geminiInputs.presencePenalty,
-          repetitionPenalty: geminiInputs.repetitionPenalty,
-          minP: geminiInputs.minP,
-          topA: geminiInputs.topA,
-          seed: geminiInputs.seed,
-          stop: geminiInputs.stop,
-          response_format: geminiInputs.response_format,
-          runId,
-          nodeRunId: node.id,
-          orchestratorRunId,
-          waitpointTokenId,
-          workflowId,
-        });
+        await tasks.trigger(
+          "gemini-inference",
+          buildGeminiInferencePayload(node, resolvedInputs, {
+            runId,
+            nodeRunId: node.id,
+            orchestratorRunId,
+            waitpointTokenId,
+            workflowId,
+          })
+        );
       } else if (node.type === "openRouter") {
-        const collectUrls = (key: string, legacyKey?: string): string[] => {
-          const raw =
-            (resolvedInputs[key] as unknown) ??
-            (legacyKey ? (resolvedInputs[legacyKey] as unknown) : undefined) ??
-            (node.data as any).inputs?.[key] ??
-            (legacyKey ? (node.data as any).inputs?.[legacyKey] : undefined);
-          const out: string[] = [];
-          const items = Array.isArray(raw) ? raw : raw ? [raw] : [];
-          for (const item of items) {
-            if (typeof item === "string" && item.length > 0) {
-              out.push(
-                ...item.split(",").map((s) => s.trim()).filter(Boolean),
-              );
-            }
-          }
-          return out;
-        };
-
-        const inputs = (node.data as any).inputs ?? {};
-        await tasks.trigger("openrouter-inference", {
-          prompt: resolvedInputs["prompt"] ?? null,
-          systemPrompt:
-            (resolvedInputs["systemPrompt"] as string) ??
-            inputs.systemPrompt ??
-            undefined,
-          images: collectUrls("image_urls", "images"),
-          video_urls: collectUrls("video_urls", "video"),
-          audio_urls: collectUrls("audio_urls", "audio"),
-          temperature: inputs.temperature ?? 0.5,
-          maxTokens: inputs.maxTokens ?? 1024,
-          topP: inputs.topP ?? 1,
-          topK: inputs.topK,
-          frequencyPenalty: inputs.frequencyPenalty,
-          presencePenalty: inputs.presencePenalty,
-          repetitionPenalty: inputs.repetitionPenalty,
-          minP: inputs.minP,
-          topA: inputs.topA,
-          seed: inputs.seed,
-          reasoning: inputs.reasoning,
-          stop: inputs.stop,
-          response_format: inputs.response_format,
-          runId,
-          nodeRunId: node.id,
-          orchestratorRunId,
-          waitpointTokenId,
-          workflowId,
-        });
+        await tasks.trigger(
+          "openrouter-inference",
+          buildOpenRouterInferencePayload(node, resolvedInputs, {
+            runId,
+            nodeRunId: node.id,
+            orchestratorRunId,
+            waitpointTokenId,
+            workflowId,
+          })
+        );
       } else if (node.type === "gptImage2") {
         await tasks.trigger("gpt-image-2", {
           prompt: (resolvedInputs["prompt"] as string) ?? "",
