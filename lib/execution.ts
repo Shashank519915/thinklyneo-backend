@@ -305,32 +305,48 @@ async function executeNode(
   if (type === "gemini") {
     const data = node.data as {
       model?: string;
-      inputs?: {
-        systemPrompt?: string | null;
-        temperature?: number;
-        maxTokens?: number;
-        topP?: number;
-      };
+      inputs?: Record<string, unknown>;
     };
     const prompt = resolvedInputs["prompt"] ?? null;
     if (!prompt || typeof prompt !== "string" || !prompt.trim()) {
       return { output: null, error: "No prompt connected or prompt is empty" };
     }
-    const images = (resolvedInputs["images"] as unknown[]) ?? [];
-    const validImages: string[] = [];
-    for (const img of images) {
-      if (typeof img === "string" && img.length > 0) {
-        const splitUrls = img.split(",").map((s) => s.trim()).filter(Boolean);
-        validImages.push(...splitUrls);
+    const collectGeminiUrls = (key: string, legacyKey?: string): string[] => {
+      const raw =
+        resolvedInputs[key] ??
+        (legacyKey ? resolvedInputs[legacyKey] : undefined) ??
+        data.inputs?.[key] ??
+        (legacyKey ? data.inputs?.[legacyKey] : undefined);
+      const out: string[] = [];
+      const items = Array.isArray(raw) ? raw : raw ? [raw] : [];
+      for (const item of items) {
+        if (typeof item === "string" && item.length > 0) {
+          out.push(...item.split(",").map((s) => s.trim()).filter(Boolean));
+        }
       }
-    }
+      return out;
+    };
+    const geminiInputs = data.inputs ?? {};
     const body = {
       model: data.model ?? "gemini-2.5-flash",
       prompt,
-      systemPrompt: resolvedInputs["systemPrompt"] ?? data.inputs?.systemPrompt ?? null,
-      images: validImages,
-      temperature: data.inputs?.temperature ?? 1.0,
-      maxTokens: data.inputs?.maxTokens ?? 2048,
+      systemPrompt: resolvedInputs["systemPrompt"] ?? geminiInputs.systemPrompt ?? null,
+      image_urls: collectGeminiUrls("image_urls", "images"),
+      video_urls: collectGeminiUrls("video_urls", "video"),
+      audio_urls: collectGeminiUrls("audio_urls", "audio"),
+      temperature: geminiInputs.temperature ?? 1.0,
+      maxTokens: geminiInputs.maxTokens ?? 2048,
+      reasoning: geminiInputs.reasoning,
+      topP: geminiInputs.topP ?? 0.95,
+      topK: geminiInputs.topK,
+      frequencyPenalty: geminiInputs.frequencyPenalty,
+      presencePenalty: geminiInputs.presencePenalty,
+      repetitionPenalty: geminiInputs.repetitionPenalty,
+      minP: geminiInputs.minP,
+      topA: geminiInputs.topA,
+      seed: geminiInputs.seed,
+      stop: geminiInputs.stop,
+      response_format: geminiInputs.response_format,
       runId,
       nodeRunId: node.id,
     };

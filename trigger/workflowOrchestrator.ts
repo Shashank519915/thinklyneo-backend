@@ -494,23 +494,46 @@ async function triggerReadyNodes(params: TriggerReadyNodesParams) {
           workflowId,
         });
       } else if (node.type === "gemini") {
-        const images = (resolvedInputs["images"] as unknown[]) ?? [];
-        const validImages: string[] = [];
-        for (const img of images) {
-          if (typeof img === "string" && img.length > 0) {
-            const splitUrls = img.split(",").map((s) => s.trim()).filter(Boolean);
-            validImages.push(...splitUrls);
+        const collectGeminiUrls = (key: string, legacyKey?: string): string[] => {
+          const raw =
+            (resolvedInputs[key] as unknown) ??
+            (legacyKey ? (resolvedInputs[legacyKey] as unknown) : undefined) ??
+            (node.data as any).inputs?.[key] ??
+            (legacyKey ? (node.data as any).inputs?.[legacyKey] : undefined);
+          const out: string[] = [];
+          const items = Array.isArray(raw) ? raw : raw ? [raw] : [];
+          for (const item of items) {
+            if (typeof item === "string" && item.length > 0) {
+              out.push(...item.split(",").map((s: string) => s.trim()).filter(Boolean));
+            }
           }
-        }
-        
+          return out;
+        };
+
+        const geminiInputs = (node.data as any).inputs ?? {};
         await tasks.trigger("gemini-inference", {
           model: (node.data as any).model ?? "gemini-2.5-flash",
           prompt: resolvedInputs["prompt"] ?? null,
-          systemPrompt: (resolvedInputs["systemPrompt"] as string) ?? (node.data as any).inputs?.systemPrompt ?? undefined,
-          images: validImages,
-          temperature: (node.data as any).inputs?.temperature ?? 1.0,
-          maxTokens: (node.data as any).inputs?.maxTokens ?? 2048,
-          topP: (node.data as any).inputs?.topP ?? 0.95,
+          systemPrompt:
+            (resolvedInputs["systemPrompt"] as string) ??
+            geminiInputs.systemPrompt ??
+            undefined,
+          image_urls: collectGeminiUrls("image_urls", "images"),
+          video_urls: collectGeminiUrls("video_urls", "video"),
+          audio_urls: collectGeminiUrls("audio_urls", "audio"),
+          temperature: geminiInputs.temperature ?? 1.0,
+          maxTokens: geminiInputs.maxTokens ?? 2048,
+          reasoning: geminiInputs.reasoning,
+          topP: geminiInputs.topP ?? 0.95,
+          topK: geminiInputs.topK,
+          frequencyPenalty: geminiInputs.frequencyPenalty,
+          presencePenalty: geminiInputs.presencePenalty,
+          repetitionPenalty: geminiInputs.repetitionPenalty,
+          minP: geminiInputs.minP,
+          topA: geminiInputs.topA,
+          seed: geminiInputs.seed,
+          stop: geminiInputs.stop,
+          response_format: geminiInputs.response_format,
           runId,
           nodeRunId: node.id,
           orchestratorRunId,

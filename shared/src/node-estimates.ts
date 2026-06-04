@@ -76,7 +76,7 @@ export function estimateNodeDisplayMicrocredits(
   inputs: Record<string, unknown> | null | undefined,
   staticBaseMicro: number,
 ): number {
-  if (nodeType === "openRouter") {
+  if (nodeType === "openRouter" || nodeType === "gemini") {
     return estimateOpenRouterCostMicrocredits(inputs as OpenRouterEstimateInputs);
   }
   return staticBaseMicro;
