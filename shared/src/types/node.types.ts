@@ -9,8 +9,14 @@ export interface ElementSubField {
   accept: "image/*" | "video/*";
   /** Max number of files (for multi). */
   maxCount?: number;
-  /** Shown below upload button as "Upload requirements" hint with tooltip. */
-  uploadRequirements?: string;
+  /** Tooltip text shown on the info icon below the upload button. */
+  uploadRequirementsTooltip?: string;
+  /** Min resolution in pixels (e.g. 1280 for 720p width). Frontend enforces on client side. */
+  minResolutionPx?: number;
+  /** Min duration in seconds (informational — full enforcement requires ffprobe). */
+  minDurationSeconds?: number;
+  /** Max duration in seconds (informational — full enforcement requires ffprobe). */
+  maxDurationSeconds?: number;
   handle?: {
     type: "text" | "image" | "video" | "audio" | "file";
     color: string;
