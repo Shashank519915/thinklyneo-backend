@@ -16,7 +16,7 @@ interface GptImage2Payload {
   prompt: string;
   uploadedImages?: string[];
   size?: string;
-  quality?: string;
+  quality?: "high" | "medium" | "low";
   n?: string;
   background?: string;
   output_format?: string;

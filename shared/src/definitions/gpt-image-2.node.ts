@@ -6,7 +6,7 @@ export const gptImage2InputSchema = z.object({
   prompt: z.string({ required_error: "Prompt is required" }).min(1, "Prompt is required"),
   uploadedImages: z.array(z.string()).min(1, "At least one input image is required").optional().nullable(),
   size: z.enum(["auto", "1024x1024", "1536x1024", "1024x1536", "2048x2048", "2048x1152", "3840x2160", "2160x3840"]).optional(),
-  quality: z.enum(["high", "standard"]).optional(),
+  quality: z.enum(["high", "medium", "low"]).optional(),
   n: z.enum(["1", "2", "3", "4"]).optional(),
   background: z.enum(["auto", "opaque"]).optional(),
   output_format: z.enum(["PNG", "JPEG", "WebP"]).optional(),
@@ -27,7 +27,7 @@ export const gptImage2Definition: NodeDefinition = {
     base: 210000, // ~0.21M microcredits
   },
   inputs: [
-    // ── Text-to-Image tab (primary) ────────────────────────────────────────
+    // ── Both tabs ─────────────────────────────────────────────────────────
     {
       key: "prompt",
       label: "Prompt",
@@ -37,6 +37,19 @@ export const gptImage2Definition: NodeDefinition = {
       handle: {
         type: "text",
         color: "#f59e0b",
+      },
+    },
+    // ── Image-to-Image tab (inserted here so it renders right after prompt) ─
+    {
+      key: "uploadedImages",
+      label: "Input Images",
+      type: "image-array",
+      required: true,
+      group: "image-mode",
+      tooltip: "Max 10 images",
+      handle: {
+        type: "image",
+        color: "#3b82f6",
       },
     },
     {
@@ -68,7 +81,8 @@ export const gptImage2Definition: NodeDefinition = {
       defaultValue: "high",
       options: [
         { label: "High", value: "high" },
-        { label: "Standard", value: "standard" },
+        { label: "Medium", value: "medium" },
+        { label: "Low", value: "low" },
       ],
       handle: {
         type: "text",
@@ -122,18 +136,6 @@ export const gptImage2Definition: NodeDefinition = {
       handle: {
         type: "text",
         color: "#f59e0b",
-      },
-    },
-    // ── Image-to-Image tab ─────────────────────────────────────────────────
-    {
-      key: "uploadedImages",
-      label: "Input Images",
-      type: "image-array",
-      required: true,
-      group: "image-mode",
-      handle: {
-        type: "image",
-        color: "#3b82f6",
       },
     },
   ],
