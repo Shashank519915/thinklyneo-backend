@@ -30,6 +30,9 @@ export const cropImageDefinition: NodeDefinition = {
       type: "file-upload",
       required: true,
       group: "primary",
+      // Tells GenericNode to render the live crop overlay preview after this field,
+      // reading sibling slider params x/y/w/h from nodeData.inputs.
+      uiVariant: "crop-overlay-preview",
       handle: {
         type: "image",
         color: "#3b82f6",

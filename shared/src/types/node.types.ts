@@ -14,8 +14,10 @@ export interface NodeParameter {
   options?: Array<{ value: string; label: string }>;
   /** Info icon tooltip on the field label (Magica-style). */
   tooltip?: string;
-  /** `magica-side-label` = label left, control right (Merge A/V media rows). */
-  uiVariant?: "magica-side-label" | "magica-volume-row";
+  /** `magica-side-label` = label left, control right (Merge A/V media rows).
+   *  `crop-overlay-preview` = after this file-upload param, render a live crop overlay
+   *  driven by sibling slider params x/y/w/h (Crop Image node). */
+  uiVariant?: "magica-side-label" | "magica-volume-row" | "crop-overlay-preview";
   handle?: {
     type: "text" | "image" | "video" | "audio" | "file";
     color: string;
