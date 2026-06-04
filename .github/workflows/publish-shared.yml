@@ -28,16 +28,20 @@ jobs:
           registry-url: "https://npm.pkg.github.com"
           scope: "@shashank519915"
 
-      # Install deps (builds shared too via workspace)
-      - run: pnpm install --frozen-lockfile
+      # Use --no-frozen-lockfile because the lockfile workspace link is an internal
+      # file: reference — it does not need to be resolved from the registry.
+      - run: pnpm install --no-frozen-lockfile
         env:
           NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      # Build the shared package explicitly to make sure dist/ is fresh
-      - run: pnpm --filter @shashank519915/shared build
+      # Build dist/ fresh before publishing
+      - name: Build shared package
+        working-directory: shared
+        run: pnpm build
 
-      # Publish. The GITHUB_TOKEN is automatically available in Actions.
-      - name: Publish @shashank519915/shared to GitHub Packages
-        run: pnpm publish --filter @shashank519915/shared --no-git-checks
+      # cd into the package directory and publish directly — more reliable than --filter
+      - name: Publish to GitHub Packages
+        working-directory: shared
+        run: pnpm publish --no-git-checks
         env:
           NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
