@@ -92,6 +92,10 @@ vi.mock("../lib/webhooks", () => ({
 
 vi.mock("../lib/credits", () => ({
   reconcileWorkflowCredits: (...args: unknown[]) => mockReconcileWorkflowCredits(...args),
+  // checkNextLayerWithinHold is called by ensureCreditBudgetBeforeLayer — default: budget ok.
+  checkNextLayerWithinHold: vi.fn().mockResolvedValue({ ok: true }),
+  // getRunHoldAmount reads the credit ledger hold entry — mock returns 10M microcredits.
+  getRunHoldAmount: vi.fn().mockResolvedValue(10_000_000),
 }));
 
 import { notifyCoordinator } from "../trigger/utils";
@@ -248,6 +252,9 @@ describe("notifyCoordinator", () => {
 
 describe("workflowOrchestratorTask — initial mode", () => {
   it("creates waitpoint, runs ready nodes, dispatches LLM, then parks on forToken", async () => {
+    // Orchestrator looks up userId from workflowRun after creating the waitpoint token.
+    mockWorkflowRunFindUnique.mockResolvedValue({ userId: "user_1" });
+
     const result = await workflowOrchestratorTask.run(
       {
         workflowId: WORKFLOW_ID,

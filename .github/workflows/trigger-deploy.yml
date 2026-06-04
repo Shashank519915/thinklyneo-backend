@@ -24,15 +24,19 @@ jobs:
         with:
           node-version: "22"
           cache: "pnpm"
+          registry-url: "https://npm.pkg.github.com"
+          scope: "@shashank519915"
 
       - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+        run: pnpm install --no-frozen-lockfile
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Generate Prisma Client
         run: pnpm exec prisma generate
 
       - name: Build shared package
-        run: pnpm --filter @galaxy/shared build
+        run: pnpm --filter @shashank519915/shared build
 
       - name: Deploy Trigger.dev tasks
         run: npx trigger.dev@latest deploy
