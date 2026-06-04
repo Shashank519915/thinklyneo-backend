@@ -543,8 +543,12 @@ async function triggerReadyNodes(params: TriggerReadyNodesParams) {
       } else if (node.type === "gptImage2") {
         await tasks.trigger("gpt-image-2", {
           prompt: (resolvedInputs["prompt"] as string) ?? "",
-          negativePrompt: (resolvedInputs["negativePrompt"] as string) ?? "",
-          aspectRatio: (resolvedInputs["aspectRatio"] as any) ?? "1:1",
+          uploadedImages: Array.isArray(resolvedInputs["uploadedImages"]) ? resolvedInputs["uploadedImages"] as string[] : undefined,
+          size: (resolvedInputs["size"] as string) || undefined,
+          quality: (resolvedInputs["quality"] as string) || undefined,
+          n: (resolvedInputs["n"] as string) || undefined,
+          background: (resolvedInputs["background"] as string) || undefined,
+          output_format: (resolvedInputs["output_format"] as string) || undefined,
           runId,
           nodeRunId: node.id,
           orchestratorRunId,

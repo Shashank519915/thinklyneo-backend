@@ -14,8 +14,12 @@ import { runNodeTaskWithProviders } from "./task-coordination";
 
 interface GptImage2Payload {
   prompt: string;
-  negativePrompt?: string;
-  aspectRatio?: "1:1" | "16:9" | "9:16";
+  uploadedImages?: string[];
+  size?: string;
+  quality?: string;
+  n?: string;
+  background?: string;
+  output_format?: string;
   runId: string;
   nodeRunId: string;
   orchestratorRunId?: string;
@@ -29,8 +33,12 @@ export const gptImage2Task = task({
   run: async (payload: GptImage2Payload) => {
     const {
       prompt,
-      negativePrompt,
-      aspectRatio = "1:1",
+      uploadedImages,
+      size,
+      quality,
+      n,
+      background,
+      output_format,
       runId,
       nodeRunId,
       orchestratorRunId,
@@ -38,15 +46,19 @@ export const gptImage2Task = task({
       workflowId,
     } = payload;
 
+    const mode = uploadedImages && uploadedImages.length > 0 ? "image-to-image" : "text-to-image";
+
     console.log(
-      `[GptImage2Task] Starting gpt-image-2 (nodeRunId: ${nodeRunId}, aspectRatio: ${aspectRatio}, negativePrompt: "${negativePrompt ?? ""}")`
+      `[GptImage2Task] Starting gpt-image-2 (nodeRunId: ${nodeRunId}, mode: ${mode}, ` +
+      `size: ${size ?? "auto"}, quality: ${quality ?? "high"}, n: ${n ?? "1"}, ` +
+      `images: ${uploadedImages?.length ?? 0})`
     );
 
     return runNodeTaskWithProviders({
       taskLabel: "GptImage2Task",
       definition: gptImage2Definition,
       coordination: { runId, nodeRunId, orchestratorRunId, waitpointTokenId, workflowId },
-      input: { prompt },
+      input: { prompt, uploadedImages, size, quality, n, background, output_format },
       executors: {
         "webhook-sim": executeWebhookSimProvider,
         stub: executeStubProvider,
