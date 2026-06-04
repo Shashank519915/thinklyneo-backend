@@ -552,17 +552,21 @@ async function triggerReadyNodes(params: TriggerReadyNodesParams) {
           workflowId,
         });
       } else if (node.type === "klingV3") {
-        let inputImage = (resolvedInputs["inputImage"] as string) || "";
-        if (inputImage) {
-          const split = inputImage.split(",").map((s) => s.trim()).filter(Boolean);
-          inputImage = split[0] || "";
-        }
-
         await tasks.trigger("kling-v3", {
-          prompt: (resolvedInputs["prompt"] as string) ?? "",
-          inputImage,
-          aspectRatio: (resolvedInputs["aspectRatio"] as any) ?? "16:9",
-          duration: (resolvedInputs["duration"] as any) ?? "5s",
+          // Text-to-video
+          prompt: (resolvedInputs["prompt"] as string) || undefined,
+          aspect_ratio: (resolvedInputs["aspect_ratio"] as any) ?? "16:9",
+          // Image-to-video
+          start_image_url: (resolvedInputs["start_image_url"] as string) || undefined,
+          description: (resolvedInputs["description"] as string) || undefined,
+          end_image_url: (resolvedInputs["end_image_url"] as string) || undefined,
+          elements: (resolvedInputs["elements"] as any) || undefined,
+          // Shared
+          duration: (resolvedInputs["duration"] as string) ?? "5",
+          negative_prompt: (resolvedInputs["negative_prompt"] as string) || undefined,
+          // Settings
+          cfg_scale: resolvedInputs["cfg_scale"] != null ? Number(resolvedInputs["cfg_scale"]) : undefined,
+          generate_audio: resolvedInputs["generate_audio"] != null ? Boolean(resolvedInputs["generate_audio"]) : undefined,
           runId,
           nodeRunId: node.id,
           orchestratorRunId,

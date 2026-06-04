@@ -12,11 +12,28 @@ import {
 } from "./executors";
 import { runNodeTaskWithProviders } from "./task-coordination";
 
+interface KlingV3Element {
+  frontal_image_url: string;
+  reference_image_urls?: string[];
+  video_url?: string;
+}
+
 interface KlingV3Payload {
-  prompt: string;
-  inputImage?: string;
-  aspectRatio?: "16:9" | "9:16" | "1:1";
-  duration?: "5s" | "10s";
+  // Text-to-video fields
+  prompt?: string;
+  aspect_ratio?: "16:9" | "9:16" | "1:1";
+  // Image-to-video fields
+  start_image_url?: string;
+  description?: string;
+  end_image_url?: string;
+  elements?: KlingV3Element[];
+  // Shared fields
+  duration?: string;
+  negative_prompt?: string;
+  // Settings
+  cfg_scale?: number;
+  generate_audio?: boolean;
+  // Coordination
   runId: string;
   nodeRunId: string;
   orchestratorRunId?: string;
@@ -30,9 +47,15 @@ export const klingV3Task = task({
   run: async (payload: KlingV3Payload) => {
     const {
       prompt,
-      inputImage,
-      aspectRatio = "16:9",
-      duration = "5s",
+      aspect_ratio = "16:9",
+      start_image_url,
+      description,
+      end_image_url,
+      elements,
+      duration = "5",
+      negative_prompt,
+      cfg_scale,
+      generate_audio,
       runId,
       nodeRunId,
       orchestratorRunId,
@@ -40,21 +63,38 @@ export const klingV3Task = task({
       workflowId,
     } = payload;
 
+    // Determine effective prompt: image tab uses "description", text tab uses "prompt"
+    const effectivePrompt = description || prompt || "";
+    const isImageToVideo = !!(start_image_url || description);
+
     console.log(
-      `[KlingV3Task] Starting kling-v3 (nodeRunId: ${nodeRunId}, aspectRatio: ${aspectRatio}, duration: ${duration}, inputImage: "${inputImage ?? ""}")`
+      `[KlingV3Task] Starting kling-v3 (nodeRunId: ${nodeRunId}, mode: ${isImageToVideo ? "image-to-video" : "text-to-video"}, ` +
+      `aspect_ratio: ${aspect_ratio}, duration: ${duration}s, ` +
+      `start_image_url: "${start_image_url ?? ""}", elements: ${elements?.length ?? 0})`
     );
 
     return runNodeTaskWithProviders({
       taskLabel: "KlingV3Task",
       definition: klingV3Definition,
       coordination: { runId, nodeRunId, orchestratorRunId, waitpointTokenId, workflowId },
-      input: { prompt },
+      input: {
+        prompt: effectivePrompt,
+        aspect_ratio,
+        start_image_url,
+        end_image_url,
+        elements,
+        duration,
+        negative_prompt,
+        cfg_scale,
+        generate_audio,
+      },
       executors: {
         "webhook-sim": executeWebhookSimProvider,
         stub: executeStubProvider,
       },
-      formatOutput: (outputUrl) => ({ outputVideo: outputUrl }),
-      formatReturn: (outputUrl) => ({ outputVideo: outputUrl }),
+      // Output key matches klingV3Definition output key "result"
+      formatOutput: (outputUrl) => ({ result: outputUrl }),
+      formatReturn: (outputUrl) => ({ result: outputUrl }),
     });
   },
 });
