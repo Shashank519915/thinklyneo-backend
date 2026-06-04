@@ -1,4 +1,5 @@
 import type { NodeDefinition } from "../types/node.types";
+import { estimateNodeDisplayMicrocredits } from "../node-estimates";
 import { cropImageDefinition } from "./crop-image.node";
 import { extractAudioDefinition } from "./extract-audio.node";
 import { geminiDefinition } from "./gemini.node";
@@ -20,17 +21,30 @@ export const EXECUTABLE_NODE_DEFINITIONS: Record<string, NodeDefinition> = {
   extractAudio: extractAudioDefinition,
 };
 
-export function estimateWorkflowCostMicrocredits(nodes: { type: string }[]): number {
+export type WorkflowNodeEstimate = {
+  type: string;
+  /** Live canvas inputs — used for dynamic display estimates (e.g. OpenRouter). */
+  inputs?: Record<string, unknown> | null;
+};
+
+export function estimateWorkflowCostMicrocredits(
+  nodes: WorkflowNodeEstimate[],
+): number {
   let total = 0;
   for (const node of nodes) {
     const def = EXECUTABLE_NODE_DEFINITIONS[node.type];
-    if (def?.credits?.base) {
-      total += def.credits.base;
-    }
+    if (!def?.credits?.base) continue;
+    total += estimateNodeDisplayMicrocredits(
+      node.type,
+      node.inputs ?? undefined,
+      def.credits.base,
+    );
   }
   return total;
 }
 
-export function estimateWorkflowCostMillions(nodes: { type: string }[]): number {
+export function estimateWorkflowCostMillions(
+  nodes: WorkflowNodeEstimate[],
+): number {
   return estimateWorkflowCostMicrocredits(nodes) / 1_000_000;
 }

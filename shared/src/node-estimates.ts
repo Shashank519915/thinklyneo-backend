@@ -54,16 +54,21 @@ export function estimateOpenRouterCostMicrocredits(
   );
 }
 
-/** Format microcredits as `~0.0001M` (reference portal precision). */
-export function formatNodeEstimateMillions(microcredits: number): string {
+/** Numeric millions string for canvas chrome (no ~ prefix). */
+export function formatMillionsValueFromMicrocredits(microcredits: number): string {
   const m = microcredits / 1_000_000;
   if (m < 0.001) {
-    return `~${m.toFixed(4)}M`;
+    return m.toFixed(4);
   }
   if (m < 0.01) {
-    return `~${m.toFixed(3)}M`;
+    return m.toFixed(3);
   }
-  return `~${m.toFixed(2)}M`;
+  return m.toFixed(2);
+}
+
+/** Format microcredits as `~0.0001M` (reference portal precision). */
+export function formatNodeEstimateMillions(microcredits: number): string {
+  return `~${formatMillionsValueFromMicrocredits(microcredits)}M`;
 }
 
 export function estimateNodeDisplayMicrocredits(
@@ -71,7 +76,7 @@ export function estimateNodeDisplayMicrocredits(
   inputs: Record<string, unknown> | null | undefined,
   staticBaseMicro: number,
 ): number {
-  if (nodeType === "openRouter" || nodeType === "gemini") {
+  if (nodeType === "openRouter") {
     return estimateOpenRouterCostMicrocredits(inputs as OpenRouterEstimateInputs);
   }
   return staticBaseMicro;

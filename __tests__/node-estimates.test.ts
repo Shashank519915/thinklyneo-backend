@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   estimateOpenRouterCostMicrocredits,
+  estimateWorkflowCostMicrocredits,
   formatNodeEstimateMillions,
 } from "@shashank519915/shared";
 
@@ -29,5 +30,17 @@ describe("estimateOpenRouterCostMicrocredits", () => {
         audio_urls: ["https://a.mp3"],
       }),
     ).toBe(100 + 700 + 500);
+  });
+
+  it("workflow total uses dynamic openRouter inputs when provided", () => {
+    expect(
+      estimateWorkflowCostMicrocredits([
+        { type: "gptImage2" },
+        {
+          type: "openRouter",
+          inputs: { image_urls: ["https://a.jpg"] },
+        },
+      ]),
+    ).toBe(210_000 + 400);
   });
 });
