@@ -22,6 +22,7 @@ export const klingV3InputSchema = z.object({
   // Settings
   cfg_scale: z.number().min(0).max(1).optional(),
   generate_audio: z.boolean().optional(),
+  description: z.string().optional(),
 });
 
 export const klingV3OutputSchema = z.object({
@@ -39,17 +40,14 @@ export const klingV3Definition: NodeDefinition = {
     base: 840000, // ~0.84M microcredits
   },
   inputs: [
-    // ── Text-to-Video fields ─────────────────────────────────────────────
+    // ── Text-to-Video tab (group: "primary") ────────────────────────────
     {
       key: "prompt",
       label: "Prompt",
       type: "textarea",
       placeholder: "Describe the video you want to generate...",
       group: "primary",
-      handle: {
-        type: "text",
-        color: "#f59e0b",
-      },
+      handle: { type: "text", color: "#f59e0b" },
     },
     {
       key: "aspect_ratio",
@@ -62,52 +60,10 @@ export const klingV3Definition: NodeDefinition = {
         { label: "9:16", value: "9:16" },
         { label: "1:1", value: "1:1" },
       ],
-      handle: {
-        type: "text",
-        color: "#f59e0b",
-      },
-    },
-
-    // ── Image-to-Video fields ────────────────────────────────────────────
-    {
-      key: "start_image_url",
-      label: "Start Frame",
-      type: "file-upload",
-      required: true,
-      group: "image-mode",
-      uiVariant: "kling-image-upload",
-      handle: {
-        type: "image",
-        color: "#3b82f6",
-      },
+      handle: { type: "text", color: "#f59e0b" },
     },
     {
-      key: "description",
-      label: "Description",
-      type: "textarea",
-      required: true,
-      placeholder: "Describe the video scene you want to create...",
-      group: "image-mode",
-      handle: {
-        type: "text",
-        color: "#f59e0b",
-      },
-    },
-    {
-      key: "end_image_url",
-      label: "End Frame",
-      type: "file-upload",
-      group: "image-mode",
-      uiVariant: "kling-image-upload",
-      handle: {
-        type: "image",
-        color: "#3b82f6",
-      },
-    },
-
-    // ── Shared fields (shown in both tabs) ───────────────────────────────
-    {
-      key: "duration",
+      key: "duration_text",
       label: "Duration",
       type: "select",
       group: "primary",
@@ -116,24 +72,70 @@ export const klingV3Definition: NodeDefinition = {
         const v = String(i + 3);
         return { label: v, value: v };
       }),
-      handle: {
-        type: "text",
-        color: "#ec4899",
-      },
+      handle: { type: "text", color: "#ec4899" },
     },
+    {
+      key: "negative_prompt_text",
+      label: "Negative Prompt",
+      type: "textarea",
+      placeholder: "Describe what you don't want in the video...",
+      group: "primary",
+      handle: { type: "text", color: "#f59e0b" },
+    },
+
+    // ── Image-to-Video tab (group: "image-mode") — order matters ────────
+    // 1. Start Frame
+    {
+      key: "start_image_url",
+      label: "Start Frame",
+      type: "file-upload",
+      required: true,
+      group: "image-mode",
+      uiVariant: "kling-image-upload",
+      handle: { type: "image", color: "#3b82f6" },
+    },
+    // 2. Description
+    {
+      key: "description",
+      label: "Description",
+      type: "textarea",
+      required: true,
+      placeholder: "Describe the video scene you want to create...",
+      group: "image-mode",
+      handle: { type: "text", color: "#f59e0b" },
+    },
+    // 3. Duration (shared concept, shown here for image tab ordering)
+    {
+      key: "duration",
+      label: "Duration",
+      type: "select",
+      group: "image-mode",
+      defaultValue: "5",
+      options: Array.from({ length: 13 }, (_, i) => {
+        const v = String(i + 3);
+        return { label: v, value: v };
+      }),
+      handle: { type: "text", color: "#ec4899" },
+    },
+    // 4. End Frame
+    {
+      key: "end_image_url",
+      label: "End Frame",
+      type: "file-upload",
+      group: "image-mode",
+      uiVariant: "kling-image-upload",
+      handle: { type: "image", color: "#3b82f6" },
+    },
+    // 5. Negative Prompt
     {
       key: "negative_prompt",
       label: "Negative Prompt",
       type: "textarea",
       placeholder: "Describe what you don't want in the video...",
-      group: "primary",
-      handle: {
-        type: "text",
-        color: "#f59e0b",
-      },
+      group: "image-mode",
+      handle: { type: "text", color: "#f59e0b" },
     },
-
-    // ── Elements (image-to-video only) ───────────────────────────────────
+    // 6. Elements
     {
       key: "elements",
       label: "Elements",
@@ -153,10 +155,10 @@ export const klingV3Definition: NodeDefinition = {
           key: "reference_image_urls",
           label: "Reference Images",
           type: "file-upload-multi",
-          required: true,
+          required: false,
           accept: "image/*",
           maxCount: 3,
-          uploadRequirements: "Max 3 images",
+          uploadRequirementsTooltip: "Max 3 images",
           handle: { type: "image", color: "#3b82f6" },
         },
         {
@@ -165,13 +167,26 @@ export const klingV3Definition: NodeDefinition = {
           type: "file-upload-single",
           required: true,
           accept: "video/*",
-          uploadRequirements: "Upload requirements",
+          uploadRequirementsTooltip: "Duration: min 3s, max 10s. Min resolution: 720p",
+          minResolutionPx: 1280,
+          minDurationSeconds: 3,
+          maxDurationSeconds: 10,
           handle: { type: "video", color: "#22c55e" },
         },
       ],
     },
 
-    // ── Settings (collapsible) ───────────────────────────────────────────
+    // ── Generate Audio — direct field in text tab, also in Settings for image tab ──
+    {
+      key: "generate_audio",
+      label: "Generate Audio",
+      type: "boolean",
+      defaultValue: true,
+      group: "primary",
+      handle: { type: "text", color: "#6366f1" },
+    },
+
+    // ── Settings (collapsible, both tabs) ───────────────────────────────
     {
       key: "cfg_scale",
       label: "CFG Scale",
@@ -182,21 +197,7 @@ export const klingV3Definition: NodeDefinition = {
       max: 1,
       step: 0.1,
       tooltip: "Controls how closely the video follows the prompt. Higher = more literal.",
-      handle: {
-        type: "text",
-        color: "#ec4899",
-      },
-    },
-    {
-      key: "generate_audio",
-      label: "Generate Audio",
-      type: "boolean",
-      defaultValue: true,
-      group: "settings",
-      handle: {
-        type: "text",
-        color: "#6366f1",
-      },
+      handle: { type: "text", color: "#ec4899" },
     },
   ],
   outputs: [
@@ -204,16 +205,14 @@ export const klingV3Definition: NodeDefinition = {
       key: "result",
       label: "Generated Video",
       type: "video",
-      handle: {
-        type: "video",
-        color: "#22c55e",
-      },
+      handle: { type: "video", color: "#22c55e" },
     },
   ],
   limits: {
     prompt: { maxLength: 2500 },
     description: { maxLength: 2500 },
     negative_prompt: { maxLength: 2500 },
+    negative_prompt_text: { maxLength: 2500 },
     start_image_url: { mediaKind: "image", maxSizeMb: 15, maxWidth: 4096, maxHeight: 4096 },
     end_image_url: { mediaKind: "image", maxSizeMb: 15, maxWidth: 4096, maxHeight: 4096 },
   },
