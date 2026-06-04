@@ -209,19 +209,29 @@ export function resolveInputsForNode(
       }
     }
 
-    if (targetHandle === "in:images") {
-      const existingImages = (inputs["images"] as unknown[]) ?? [];
+    if (targetHandle === "in:images" || targetHandle === "in:image_urls") {
+      // Fan-in: both legacy `images` and new `image_urls` accumulate into image_urls
+      const existingImages = (inputs["image_urls"] as unknown[]) ?? [];
       if (valueToPass !== null && valueToPass !== undefined) {
-        inputs["images"] = [...existingImages, valueToPass];
+        inputs["image_urls"] = [...existingImages, valueToPass];
       } else {
-        inputs["images"] = existingImages;
+        inputs["image_urls"] = existingImages;
       }
+      // Also keep legacy key in sync for backward compat
+      inputs["images"] = inputs["image_urls"];
     } else if (targetHandle === "in:video_urls") {
       const existingVideos = (inputs["video_urls"] as unknown[]) ?? [];
       if (valueToPass !== null && valueToPass !== undefined) {
         inputs["video_urls"] = [...existingVideos, valueToPass];
       } else {
         inputs["video_urls"] = existingVideos;
+      }
+    } else if (targetHandle === "in:audio_urls") {
+      const existingAudio = (inputs["audio_urls"] as unknown[]) ?? [];
+      if (valueToPass !== null && valueToPass !== undefined) {
+        inputs["audio_urls"] = [...existingAudio, valueToPass];
+      } else {
+        inputs["audio_urls"] = existingAudio;
       }
     } else {
       const key = targetHandle.startsWith("in:") ? targetHandle.slice(3) : targetHandle;
