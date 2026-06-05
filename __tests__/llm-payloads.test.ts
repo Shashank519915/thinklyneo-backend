@@ -50,4 +50,14 @@ describe("llm-payloads", () => {
       buildGeminiInferencePayload(node("gemini"), {}, coordination)
     ).toThrow(/prompt/i);
   });
+
+  it("prefers promoted settings from resolvedInputs over static node inputs", () => {
+    const payload = buildGeminiInferencePayload(
+      node("gemini", { temperature: 0.5, reasoning: false }),
+      { prompt: "hello", temperature: "0.9", reasoning: "true" },
+      coordination
+    );
+    expect(payload.temperature).toBe(0.9);
+    expect(payload.reasoning).toBe(true);
+  });
 });

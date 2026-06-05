@@ -84,21 +84,26 @@ function coerceOptionalString(value: unknown): string | undefined {
   return s.length > 0 ? s : undefined;
 }
 
-function pickLlmSettings(nodeInputs: Record<string, unknown>) {
+/** Merged resolved edge/request values win over static node.data.inputs. */
+function pickLlmSettings(
+  resolvedInputs: Record<string, unknown>,
+  nodeInputs: Record<string, unknown>
+) {
+  const src = { ...nodeInputs, ...resolvedInputs };
   return {
-    temperature: coerceOptionalNumber(nodeInputs.temperature),
-    maxTokens: coerceOptionalNumber(nodeInputs.maxTokens),
-    reasoning: coerceOptionalBoolean(nodeInputs.reasoning),
-    topP: coerceOptionalNumber(nodeInputs.topP),
-    topK: coerceOptionalNumber(nodeInputs.topK),
-    frequencyPenalty: coerceOptionalNumber(nodeInputs.frequencyPenalty),
-    presencePenalty: coerceOptionalNumber(nodeInputs.presencePenalty),
-    repetitionPenalty: coerceOptionalNumber(nodeInputs.repetitionPenalty),
-    minP: coerceOptionalNumber(nodeInputs.minP),
-    topA: coerceOptionalNumber(nodeInputs.topA),
-    seed: coerceOptionalNumber(nodeInputs.seed),
-    stop: coerceOptionalString(nodeInputs.stop) ?? null,
-    response_format: coerceOptionalBoolean(nodeInputs.response_format),
+    temperature: coerceOptionalNumber(src.temperature),
+    maxTokens: coerceOptionalNumber(src.maxTokens),
+    reasoning: coerceOptionalBoolean(src.reasoning),
+    topP: coerceOptionalNumber(src.topP),
+    topK: coerceOptionalNumber(src.topK),
+    frequencyPenalty: coerceOptionalNumber(src.frequencyPenalty),
+    presencePenalty: coerceOptionalNumber(src.presencePenalty),
+    repetitionPenalty: coerceOptionalNumber(src.repetitionPenalty),
+    minP: coerceOptionalNumber(src.minP),
+    topA: coerceOptionalNumber(src.topA),
+    seed: coerceOptionalNumber(src.seed),
+    stop: coerceOptionalString(src.stop) ?? null,
+    response_format: coerceOptionalBoolean(src.response_format),
   };
 }
 
@@ -117,7 +122,7 @@ export function buildGeminiInferencePayload(
     image_urls: collectNodeMediaUrls(resolvedInputs, nodeInputs, "image_urls", "images"),
     video_urls: collectNodeMediaUrls(resolvedInputs, nodeInputs, "video_urls", "video"),
     audio_urls: collectNodeMediaUrls(resolvedInputs, nodeInputs, "audio_urls", "audio"),
-    ...pickLlmSettings(nodeInputs),
+    ...pickLlmSettings(resolvedInputs, nodeInputs),
   } satisfies GeminiInput);
 
   return {
@@ -143,7 +148,7 @@ export function buildOpenRouterInferencePayload(
     image_urls: collectNodeMediaUrls(resolvedInputs, nodeInputs, "image_urls", "images"),
     video_urls: collectNodeMediaUrls(resolvedInputs, nodeInputs, "video_urls", "video"),
     audio_urls: collectNodeMediaUrls(resolvedInputs, nodeInputs, "audio_urls", "audio"),
-    ...pickLlmSettings(nodeInputs),
+    ...pickLlmSettings(resolvedInputs, nodeInputs),
   } satisfies OpenRouterInput);
 
   return {
