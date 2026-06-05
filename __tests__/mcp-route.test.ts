@@ -21,7 +21,8 @@ describe("POST /api/mcp", () => {
     expect(data.id).toBe(1);
     const tools = (data.result as { tools?: { name: string }[] })?.tools ?? [];
     const names = tools.map((t) => t.name);
-    expect(names).toEqual([
+    // Core workflow/run/credit tools must always be present.
+    for (const core of [
       "list_workflows",
       "get_workflow",
       "create_workflow",
@@ -29,7 +30,41 @@ describe("POST /api/mcp", () => {
       "start_run",
       "get_run_status",
       "get_balance",
-    ]);
+    ]) {
+      expect(names).toContain(core);
+    }
+    // Discovery tools (static, no auth) are exposed in the manifest.
+    for (const discovery of ["list_node_types", "get_model_schema", "list_system_workflows"]) {
+      expect(names).toContain(discovery);
+    }
+  });
+
+  it("list_node_types works without an API key (static discovery)", async () => {
+    const data = await postMcp({
+      jsonrpc: "2.0",
+      id: 6,
+      method: "tools/call",
+      params: { name: "list_node_types", arguments: {} },
+    });
+    const result = data.result as { isError?: boolean; content?: { text: string }[] };
+    expect(result?.isError).toBeFalsy();
+    const text = result?.content?.[0]?.text ?? "";
+    expect(text).toMatch(/executableNodes/);
+    expect(text).toMatch(/openRouter/);
+  });
+
+  it("get_model_schema returns input schema for a node type", async () => {
+    const data = await postMcp({
+      jsonrpc: "2.0",
+      id: 7,
+      method: "tools/call",
+      params: { name: "get_model_schema", arguments: { type: "openRouter" } },
+    });
+    const result = data.result as { isError?: boolean; content?: { text: string }[] };
+    expect(result?.isError).toBeFalsy();
+    const text = result?.content?.[0]?.text ?? "";
+    expect(text).toMatch(/in:prompt/);
+    expect(text).toMatch(/outputShape/);
   });
 
   it("initialize returns server info and routing instructions", async () => {

@@ -66,7 +66,9 @@ pnpm dev
 
 Without `npx trigger.dev dev`, execute routes enqueue tasks but nothing processes them.
 
-**Scripts:** `pnpm typecheck`, `pnpm lint`, `pnpm test`, `pnpm db:studio`, `pnpm mcp:start`, `pnpm mcp:smoke`
+**Scripts:** `pnpm typecheck`, `pnpm lint`, `pnpm test`, `pnpm db:studio`
+
+> The MCP server is hosted at `/api/mcp` (no local script). See `docs/MCP_SETUP.md`.
 
 ---
 

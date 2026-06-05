@@ -17,8 +17,12 @@ export async function GET(request: Request) {
   const { userId, rateLimitHeaders } = authResult;
 
   try {
+    const search = new URL(request.url).searchParams.get("search")?.trim() || undefined;
     const workflows = await prisma.workflow.findMany({
-      where: { userId },
+      where: {
+        userId,
+        ...(search ? { name: { contains: search, mode: "insensitive" as const } } : {}),
+      },
       orderBy: { updatedAt: "desc" },
       select: {
         id: true,
@@ -68,6 +72,25 @@ export async function POST(request: Request) {
       template: parsed.data.template,
       productBrief: parsed.data.productBrief,
     });
+
+    // Optionally seed Request-Inputs fields (e.g. agent-defined inputs for an empty canvas).
+    if (parsed.data.requestFields?.length) {
+      const ri = (nodes as Array<{ type: string; data?: Record<string, unknown> }>).find(
+        (n) => n.type === "requestInputs"
+      );
+      if (ri) {
+        ri.data = ri.data ?? {};
+        ri.data.fields = parsed.data.requestFields.map((f, i) => {
+          const type = f.type ?? "text_field";
+          return {
+            id: f.id ?? `field_${type.replace("_field", "")}_${i + 1}`,
+            type,
+            label: f.label ?? type,
+            value: f.value ?? (type === "text_field" || type === "select_field" ? "" : null),
+          };
+        });
+      }
+    }
 
     const workflow = await prisma.workflow.create({
       data: {

@@ -28,4 +28,23 @@ describe("workflow-templates", () => {
     const textField = requestInputs.data.fields.find((f) => f.id === "field_text_1");
     expect(textField?.value).toBe(brief);
   });
+
+  it("crop outputs wire to OpenRouter vision via in:image_urls", () => {
+    const { nodes, edges } = buildAdvertisementGraph();
+    const cropEdges = edges.filter(
+      (e) =>
+        (e as { target: string }).target === "gemini-final" &&
+        (e as { sourceHandle: string }).sourceHandle === "out:outputImage"
+    );
+    expect(cropEdges).toHaveLength(2);
+    for (const edge of cropEdges) {
+      expect((edge as { targetHandle: string }).targetHandle).toBe("in:image_urls");
+      expect((edge as { sourceHandle: string }).sourceHandle).toBe("out:outputImage");
+    }
+    const finalLlm = nodes.find((n) => (n as { id: string }).id === "gemini-final") as {
+      data: { inputs: Record<string, unknown> };
+    };
+    expect(finalLlm.data.inputs).toHaveProperty("image_urls");
+    expect(finalLlm.data.inputs).not.toHaveProperty("images");
+  });
 });

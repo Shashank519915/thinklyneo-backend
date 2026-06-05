@@ -144,7 +144,7 @@ Microcredit ledger (1,000,000 micro = 1.00 credit). Flow: estimate in-scope `cre
 |---------|-----------|--------|
 | Dashboard / canvas | Clerk session + `userId` ownership | `/api/workflows/*`, `/api/execute/*`, `/api/keys`, `/api/credits` |
 | Public API | Unkey or SHA-256 `ApiKey` table | `/api/v1/*` |
-| MCP | Bearer API key | `/api/mcp` (hosted), `scripts/mcp-server.ts` (StdIO) |
+| MCP | Bearer API key | `/api/mcp` (hosted Streamable HTTP — single supported transport) |
 
 ### Outbound webhooks
 

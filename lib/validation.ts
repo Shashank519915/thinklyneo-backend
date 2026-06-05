@@ -5,12 +5,34 @@
 
 import { z } from "zod";
 
-/** `POST /api/workflows` validation — initial label + optional description. */
+/** A single seeded Request-Inputs field for create_workflow. */
+export const requestFieldSchema = z.object({
+  id: z.string().max(120).optional(),
+  type: z
+    .enum([
+      "text_field",
+      "select_field",
+      "number_field",
+      "boolean_field",
+      "image_field",
+      "audio_field",
+      "video_field",
+      "media_field",
+      "file_field",
+    ])
+    .optional(),
+  label: z.string().max(120).optional(),
+  value: z.any().optional(),
+});
+
+/** `POST /api/workflows` validation — initial label + optional description + seed fields. */
 export const createWorkflowSchema = z.object({
   name: z.string().min(1).max(120),
   description: z.string().max(5000).optional(),
   template: z.enum(["empty", "advertisement"]).optional(),
   productBrief: z.string().max(5000).optional(),
+  /** Optional Request-Inputs fields to seed (text/select/number values only; leave media empty). */
+  requestFields: z.array(requestFieldSchema).max(20).optional(),
 });
 
 /**
