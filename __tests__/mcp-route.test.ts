@@ -25,21 +25,41 @@ describe("POST /api/mcp", () => {
       "list_workflows",
       "get_workflow",
       "create_workflow",
+      "update_workflow",
       "start_run",
       "get_run_status",
       "get_balance",
     ]);
   });
 
-  it("initialize returns server info", async () => {
+  it("initialize returns server info and routing instructions", async () => {
     const data = await postMcp({
       jsonrpc: "2.0",
       id: 2,
       method: "initialize",
       params: { protocolVersion: "2025-06-18" },
     });
-    const result = data.result as { serverInfo?: { name: string } };
+    const result = data.result as { serverInfo?: { name: string }; instructions?: string };
     expect(result?.serverInfo?.name).toBe("galaxy-mcp-server");
+    expect(result?.instructions).toMatch(/create_workflow/i);
+    expect(result?.instructions).toMatch(/do not create local files/i);
+  });
+
+  it("create_workflow description steers agents to call Galaxy MCP", async () => {
+    const data = await postMcp({ jsonrpc: "2.0", id: 4, method: "tools/list" });
+    const tools = (data.result as { tools?: { name: string; description: string }[] })?.tools ?? [];
+    const createWorkflow = tools.find((t) => t.name === "create_workflow");
+    expect(createWorkflow?.description).toMatch(/galaxy platform/i);
+    expect(createWorkflow?.description).toMatch(/do not build workflow files locally/i);
+    expect(createWorkflow?.description).toMatch(/advertisement/i);
+  });
+
+  it("create_workflow schema includes template and productBrief", async () => {
+    const data = await postMcp({ jsonrpc: "2.0", id: 5, method: "tools/list" });
+    const tools = (data.result as { tools?: { name: string; inputSchema: { properties: Record<string, unknown> } }[] })?.tools ?? [];
+    const createWorkflow = tools.find((t) => t.name === "create_workflow");
+    expect(createWorkflow?.inputSchema.properties.template).toBeDefined();
+    expect(createWorkflow?.inputSchema.properties.productBrief).toBeDefined();
   });
 
   it("tools/call without API key returns isError content", async () => {

@@ -163,6 +163,26 @@ describe("POST /api/v1/workflows", () => {
     const createArg = mockCreate.mock.calls[0][0].data;
     expect(createArg.description).toBe("desc");
   });
+
+  it("creates advertisement template workflow with productBrief in nodes", async () => {
+    mockVerify.mockResolvedValueOnce(AUTH_OK);
+    mockCreate.mockResolvedValueOnce({ id: "wf_adv", name: "T-Shirt Promo", status: "idle" });
+    const brief = "T-shirt company summer sale: 20% off graphic tees";
+    const res = await createWorkflow(
+      makeRequest("POST", {
+        name: "T-Shirt Promo",
+        template: "advertisement",
+        productBrief: brief,
+      })
+    );
+    expect(res.status).toBe(201);
+    const createArg = mockCreate.mock.calls[0][0].data;
+    const nodes = createArg.nodes as { id: string; type: string; data: { fields?: { id: string; value: string }[] } }[];
+    expect(nodes.some((n) => n.type === "openRouter")).toBe(true);
+    const requestInputs = nodes.find((n) => n.id === "request-inputs");
+    const textField = requestInputs?.data.fields?.find((f) => f.id === "field_text_1");
+    expect(textField?.value).toBe(brief);
+  });
 });
 
 // ── GET /api/v1/workflows/:id ──────────────────────────────────────────────

@@ -3,43 +3,14 @@ import path from "path";
 import { fileURLToPath } from "url";
 import crypto from "crypto";
 import { Prisma } from "@prisma/client";
+import { MCP_SERVER_INSTRUCTIONS, MCP_TOOLS } from "../lib/mcp-tools.js";
+import { resolveWorkflowGraph, type WorkflowTemplate } from "../lib/workflow-templates.js";
 
 // Resolve paths for loading local env vars in development BEFORE prisma load
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 dotenv.config({ path: path.resolve(__dirname, "../.env.local") });
 dotenv.config();
-
-// Default system nodes for new workflow creation
-const DEFAULT_NODES = [
-  {
-    id: "request-inputs",
-    type: "requestInputs",
-    position: { x: 100, y: 250 },
-    data: {
-      label: "Request-Inputs",
-      fields: [
-        {
-          id: "field_text_default",
-          type: "text_field",
-          label: "text_field",
-          value: "",
-        },
-      ],
-    },
-  },
-  {
-    id: "response",
-    type: "response",
-    position: { x: 700, y: 250 },
-    data: {
-      label: "Output",
-      results: [],
-    },
-  },
-];
-
-const DEFAULT_EDGES: any[] = [];
 
 async function main() {
   // Dynamic imports inside async function to avoid CJS top-level await error
@@ -122,95 +93,12 @@ async function main() {
       capabilities: {
         tools: {},
       },
+      instructions: MCP_SERVER_INSTRUCTIONS,
     }
   );
 
-  // Register Tool Schemas
   server.setRequestHandler(ListToolsRequestSchema, async () => {
-    return {
-      tools: [
-        {
-          name: "list_workflows",
-          description: "Lists all workflow canvases owned by the user (metadata only).",
-          inputSchema: {
-            type: "object",
-            properties: {},
-          },
-        },
-        {
-          name: "get_workflow",
-          description: "Fetch nodes, edges, and details of a single workflow.",
-          inputSchema: {
-            type: "object",
-            properties: {
-              workflowId: {
-                type: "string",
-                description: "The unique ID of the workflow to fetch.",
-              },
-            },
-            required: ["workflowId"],
-          },
-        },
-        {
-          name: "create_workflow",
-          description: "Create a new workflow canvas with default Request-Inputs and Response nodes.",
-          inputSchema: {
-            type: "object",
-            properties: {
-              name: {
-                type: "string",
-                description: "The display name of the new workflow.",
-              },
-              description: {
-                type: "string",
-                description: "Optional description of what this workflow does.",
-              },
-            },
-            required: ["name"],
-          },
-        },
-        {
-          name: "start_run",
-          description: "Executes a workflow by topological node ordering. Deducts credits and runs in background.",
-          inputSchema: {
-            type: "object",
-            properties: {
-              workflowId: {
-                type: "string",
-                description: "The unique ID of the workflow to execute.",
-              },
-              inputValues: {
-                type: "object",
-                description: "Optional override key-value parameters passed to Request-Inputs node.",
-              },
-            },
-            required: ["workflowId"],
-          },
-        },
-        {
-          name: "get_run_status",
-          description: "Poll status, durations, errors, and terminal output results of a workflow execution run.",
-          inputSchema: {
-            type: "object",
-            properties: {
-              runId: {
-                type: "string",
-                description: "The unique ID of the execution run.",
-              },
-            },
-            required: ["runId"],
-          },
-        },
-        {
-          name: "get_balance",
-          description: "Check the current remaining microcredits balance of the user.",
-          inputSchema: {
-            type: "object",
-            properties: {},
-          },
-        },
-      ],
-    };
+    return { tools: MCP_TOOLS };
   });
 
   // Handle Tool Calls
@@ -266,14 +154,20 @@ async function main() {
         }
 
         case "create_workflow": {
-          const { name: wfName, description } = args as { name: string; description?: string };
+          const { name: wfName, description, template, productBrief } = args as {
+            name: string;
+            description?: string;
+            template?: WorkflowTemplate;
+            productBrief?: string;
+          };
+          const { nodes, edges } = resolveWorkflowGraph({ template, productBrief });
           const newWorkflow = await prisma.workflow.create({
             data: {
               userId,
               name: wfName,
               description: description ?? null,
-              nodes: DEFAULT_NODES as any,
-              edges: DEFAULT_EDGES as any,
+              nodes: nodes as any,
+              edges: edges as any,
               status: "idle",
             },
           });
@@ -283,6 +177,44 @@ async function main() {
               {
                 type: "text",
                 text: `Workflow created successfully:\n${JSON.stringify(newWorkflow, null, 2)}`,
+              },
+            ],
+          };
+        }
+
+        case "update_workflow": {
+          const { workflowId, name, description, nodes, edges } = args as {
+            workflowId: string;
+            name?: string;
+            description?: string;
+            nodes?: unknown[];
+            edges?: unknown[];
+          };
+
+          const existing = await prisma.workflow.findUnique({
+            where: { id: workflowId, userId },
+            select: { id: true },
+          });
+
+          if (!existing) {
+            throw new McpError(ErrorCode.InvalidParams, `Workflow with ID '${workflowId}' not found.`);
+          }
+
+          const updated = await prisma.workflow.update({
+            where: { id: workflowId },
+            data: {
+              ...(name !== undefined && { name }),
+              ...(description !== undefined && { description }),
+              ...(nodes !== undefined && { nodes: nodes as any }),
+              ...(edges !== undefined && { edges: edges as any }),
+            },
+          });
+
+          return {
+            content: [
+              {
+                type: "text",
+                text: `Workflow updated successfully:\n${JSON.stringify(updated, null, 2)}`,
               },
             ],
           };

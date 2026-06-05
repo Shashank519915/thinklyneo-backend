@@ -2,36 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { verifyApiRequest } from "@/lib/api-auth";
 import { createWorkflowSchema } from "@/lib/validation";
-
-const DEFAULT_NODES = [
-  {
-    id: "request-inputs",
-    type: "requestInputs",
-    position: { x: 100, y: 250 },
-    data: {
-      label: "Request-Inputs",
-      fields: [
-        {
-          id: "field_text_default",
-          type: "text_field",
-          label: "text_field",
-          value: "",
-        },
-      ],
-    },
-  },
-  {
-    id: "response",
-    type: "response",
-    position: { x: 700, y: 250 },
-    data: {
-      label: "Output",
-      results: []
-    },
-  },
-];
-
-const DEFAULT_EDGES: unknown[] = [];
+import { resolveWorkflowGraph } from "@/lib/workflow-templates";
 
 /**
  * GET /api/v1/workflows
@@ -93,13 +64,18 @@ export async function POST(request: Request) {
       );
     }
 
+    const { nodes, edges } = resolveWorkflowGraph({
+      template: parsed.data.template,
+      productBrief: parsed.data.productBrief,
+    });
+
     const workflow = await prisma.workflow.create({
       data: {
         userId,
         name: parsed.data.name,
         description: parsed.data.description ?? null,
-        nodes: DEFAULT_NODES as any,
-        edges: DEFAULT_EDGES as any,
+        nodes: nodes as any,
+        edges: edges as any,
         status: "idle",
       },
     });

@@ -22,6 +22,7 @@
  */
 
 import { NextResponse } from "next/server";
+import { MCP_SERVER_INSTRUCTIONS, MCP_TOOLS } from "@/lib/mcp-tools";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -29,72 +30,6 @@ export const dynamic = "force-dynamic";
 const DEFAULT_PROTOCOL_VERSION = "2025-06-18";
 
 const SERVER_INFO = { name: "galaxy-mcp-server", version: "1.0.0" } as const;
-
-const TOOLS = [
-  {
-    name: "list_workflows",
-    description: "List all workflow canvases owned by the authenticated user (metadata only).",
-    inputSchema: { type: "object", properties: {} },
-  },
-  {
-    name: "get_workflow",
-    description: "Fetch the full nodes, edges, and metadata of a single workflow.",
-    inputSchema: {
-      type: "object",
-      properties: {
-        workflowId: { type: "string", description: "ID of the workflow to fetch." },
-      },
-      required: ["workflowId"],
-    },
-  },
-  {
-    name: "create_workflow",
-    description:
-      "Create a new workflow canvas. Returns the new workflow with default Request-Inputs and Response nodes.",
-    inputSchema: {
-      type: "object",
-      properties: {
-        name: { type: "string", description: "Display name of the new workflow." },
-        description: { type: "string", description: "Optional description." },
-      },
-      required: ["name"],
-    },
-  },
-  {
-    name: "start_run",
-    description:
-      "Execute a workflow. Deducts credits and runs in the background on Trigger.dev. Returns a runId to poll with get_run_status.",
-    inputSchema: {
-      type: "object",
-      properties: {
-        workflowId: { type: "string", description: "ID of the workflow to execute." },
-        inputValues: {
-          type: "object",
-          description:
-            'Flat key→value map of Request-Inputs field IDs to their values. e.g. { "field_text_default": "Hello world" }',
-        },
-      },
-      required: ["workflowId"],
-    },
-  },
-  {
-    name: "get_run_status",
-    description:
-      "Poll the status and per-node results of a workflow run. Call repeatedly until status is 'success' or 'failed'.",
-    inputSchema: {
-      type: "object",
-      properties: {
-        runId: { type: "string", description: "ID returned by start_run." },
-      },
-      required: ["runId"],
-    },
-  },
-  {
-    name: "get_balance",
-    description: "Check the current microcredit balance for the authenticated user.",
-    inputSchema: { type: "object", properties: {} },
-  },
-];
 
 type JsonRpcId = string | number | null;
 
@@ -165,9 +100,29 @@ async function callTool(
       if (!wfName) throw new Error("name is required.");
       const workflow = await apiFetch(origin, apiKey, "/workflows", {
         method: "POST",
-        body: JSON.stringify({ name: wfName, description: args.description }),
+        body: JSON.stringify({
+          name: wfName,
+          description: args.description,
+          template: args.template,
+          productBrief: args.productBrief,
+        }),
       });
       return textContent(`Workflow created:\n${JSON.stringify(workflow, null, 2)}`);
+    }
+
+    case "update_workflow": {
+      const workflowId = args.workflowId as string;
+      if (!workflowId) throw new Error("workflowId is required.");
+      const patch: Record<string, unknown> = {};
+      if (args.name !== undefined) patch.name = args.name;
+      if (args.description !== undefined) patch.description = args.description;
+      if (args.nodes !== undefined) patch.nodes = args.nodes;
+      if (args.edges !== undefined) patch.edges = args.edges;
+      const workflow = await apiFetch(origin, apiKey, `/workflows/${workflowId}`, {
+        method: "PUT",
+        body: JSON.stringify(patch),
+      });
+      return textContent(`Workflow updated:\n${JSON.stringify(workflow, null, 2)}`);
     }
 
     case "start_run": {
@@ -248,6 +203,7 @@ export async function POST(request: Request) {
             protocolVersion: (params?.protocolVersion as string) ?? DEFAULT_PROTOCOL_VERSION,
             capabilities: { tools: {} },
             serverInfo: SERVER_INFO,
+            instructions: MCP_SERVER_INSTRUCTIONS,
           })
         );
         break;
@@ -257,7 +213,7 @@ export async function POST(request: Request) {
         break;
 
       case "tools/list":
-        responses.push(rpcResult(id, { tools: TOOLS }));
+        responses.push(rpcResult(id, { tools: MCP_TOOLS }));
         break;
 
       case "tools/call": {
