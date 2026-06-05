@@ -1,5 +1,4 @@
 import type { NodeDefinition } from "../types/node.types";
-import { estimateNodeDisplayMicrocredits } from "../node-estimates";
 import { cropImageDefinition } from "./crop-image.node";
 import { extractAudioDefinition } from "./extract-audio.node";
 import { geminiDefinition } from "./gemini.node";
@@ -27,6 +26,10 @@ export type WorkflowNodeEstimate = {
   inputs?: Record<string, unknown> | null;
 };
 
+/**
+ * Pre-run hold and per-layer budget checks. Must match `creditCost` on successful node runs
+ * (`definition.credits.base`), not the dynamic display estimate on OpenRouter/Gemini badges.
+ */
 export function estimateWorkflowCostMicrocredits(
   nodes: WorkflowNodeEstimate[],
 ): number {
@@ -34,11 +37,7 @@ export function estimateWorkflowCostMicrocredits(
   for (const node of nodes) {
     const def = EXECUTABLE_NODE_DEFINITIONS[node.type];
     if (!def?.credits?.base) continue;
-    total += estimateNodeDisplayMicrocredits(
-      node.type,
-      node.inputs ?? undefined,
-      def.credits.base,
-    );
+    total += def.credits.base;
   }
   return total;
 }

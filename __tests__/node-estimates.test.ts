@@ -32,7 +32,7 @@ describe("estimateOpenRouterCostMicrocredits", () => {
     ).toBe(100 + 700 + 500);
   });
 
-  it("workflow total uses dynamic openRouter inputs when provided", () => {
+  it("workflow total uses billing base (not dynamic display estimate)", () => {
     expect(
       estimateWorkflowCostMicrocredits([
         { type: "gptImage2" },
@@ -41,6 +41,6 @@ describe("estimateOpenRouterCostMicrocredits", () => {
           inputs: { image_urls: ["https://a.jpg"] },
         },
       ]),
-    ).toBe(210_000 + 400);
+    ).toBe(210_000 + 450_000);
   });
 });
