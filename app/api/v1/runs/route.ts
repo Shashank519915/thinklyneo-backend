@@ -3,7 +3,12 @@ import { prisma } from "@/lib/prisma";
 import { Prisma } from "@prisma/client";
 import { verifyApiRequest } from "@/lib/api-auth";
 import { z } from "zod";
-import { estimateWorkflowCost, getOrCreateBalance } from "@/lib/credits";
+import {
+  estimateWorkflowCost,
+  formatCreditsMicro,
+  getOrCreateBalance,
+  logCredits,
+} from "@/lib/credits";
 import { validateWorkflowInputs } from "@/lib/validate-input-limits";
 import { triggerOutboundWebhook } from "@/lib/webhooks";
 
@@ -128,6 +133,13 @@ export async function POST(request: Request) {
             runId: newRun.id,
             balanceAfter: nextBalance,
           },
+        });
+        logCredits("hold_placed", {
+          runId: newRun.id,
+          userId,
+          source: "api_v1_runs",
+          hold: formatCreditsMicro(estimatedCost),
+          balanceAfter: formatCreditsMicro(nextBalance),
         });
       }
 

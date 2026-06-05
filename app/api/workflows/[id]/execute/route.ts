@@ -11,7 +11,12 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { Prisma } from "@prisma/client";
 import { z } from "zod";
-import { estimateWorkflowCost, getOrCreateBalance } from "@/lib/credits";
+import {
+  estimateWorkflowCost,
+  formatCreditsMicro,
+  getOrCreateBalance,
+  logCredits,
+} from "@/lib/credits";
 import { validateWorkflowInputs } from "@/lib/validate-input-limits";
 
 const executeSchema = z.object({
@@ -142,6 +147,13 @@ export async function POST(
             runId: newRun.id,
             balanceAfter: nextBalance,
           },
+        });
+        logCredits("hold_placed", {
+          runId: newRun.id,
+          userId,
+          source: "ui_execute",
+          hold: formatCreditsMicro(estimatedCost),
+          balanceAfter: formatCreditsMicro(nextBalance),
         });
       }
 

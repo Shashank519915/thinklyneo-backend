@@ -3,6 +3,7 @@
  */
 
 import type { NodeDefinition, ProviderKind } from "@shashank519915/shared";
+import { formatCreditsMicro, logCredits } from "../lib/credits";
 import { notifyCoordinator } from "./utils";
 import {
   ProviderChainExhaustedError,
@@ -37,6 +38,16 @@ export async function notifyCoordinatorSuccess(
 ): Promise<void> {
   if (!hasCoordination(ctx)) return;
 
+  const creditCost = definition.credits.base;
+  logCredits("node_charged", {
+    runId: ctx.runId,
+    nodeId: ctx.nodeRunId,
+    nodeType: definition.type,
+    provider: chain.providerUsed ?? "unknown",
+    creditCost: formatCreditsMicro(creditCost),
+    durationMs: Date.now() - startedAtMs,
+  });
+
   await notifyCoordinator({
     workflowId: ctx.workflowId,
     runId: ctx.runId,
@@ -49,7 +60,7 @@ export async function notifyCoordinatorSuccess(
     providerUsed: chain.providerUsed,
     providerAttempts: chain.providerAttempts,
     logs: chain.logs,
-    creditCost: definition.credits.base,
+    creditCost,
   });
 }
 
@@ -61,6 +72,13 @@ export async function notifyCoordinatorFailure(
   logs: string
 ): Promise<void> {
   if (!hasCoordination(ctx)) return;
+
+  logCredits("node_failed_no_charge", {
+    runId: ctx.runId,
+    nodeId: ctx.nodeRunId,
+    creditCost: formatCreditsMicro(0),
+    durationMs: Date.now() - startedAtMs,
+  });
 
   await notifyCoordinator({
     workflowId: ctx.workflowId,

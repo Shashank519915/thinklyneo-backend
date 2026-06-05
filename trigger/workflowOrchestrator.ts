@@ -25,7 +25,13 @@ import {
   type SerializedNode,
   type SerializedEdge,
 } from "./orchestrator-utils";
-import { checkNextLayerWithinHold, reconcileWorkflowCredits, getRunHoldAmount } from "../lib/credits";
+import {
+  checkNextLayerWithinHold,
+  formatCreditsMicro,
+  getRunHoldAmount,
+  logCredits,
+  reconcileWorkflowCredits,
+} from "../lib/credits";
 import {
   buildGeminiInferencePayload,
   buildOpenRouterInferencePayload,
@@ -41,6 +47,8 @@ interface NodeState {
   status: "pending" | "running" | "completed" | "failed" | "skipped";
   output?: unknown;
   error?: string;
+  /** Microcredits charged for this node (from NodeRun after completion). */
+  creditCost?: number;
 }
 
 interface OrchestratorPayload {
@@ -416,9 +424,9 @@ async function triggerReadyNodes(params: TriggerReadyNodesParams) {
         );
 
         if (error) {
-          nodeStates[node.id] = { status: "failed", error };
+          nodeStates[node.id] = { status: "failed", error, creditCost: 0 };
         } else {
-          nodeStates[node.id] = { status: "completed", output };
+          nodeStates[node.id] = { status: "completed", output, creditCost: 0 };
           resolvedOutputs.set(node.id, output);
         }
         await updateRootMetadata(orchestratorRunId, nodeStates);
@@ -886,10 +894,24 @@ export const workflowOrchestratorTask = task({
           status: statusMap[nr.status] || "pending",
           output: nr.output ?? undefined,
           error: nr.error ?? undefined,
+          ...(nr.creditCost != null ? { creditCost: nr.creditCost } : {}),
         };
         if (nr.status === "success") {
           resolvedOutputs.set(nr.nodeId, nr.output);
         }
+      }
+
+      const streamedCredits = Object.values(nodeStates).reduce(
+        (sum, st) => sum + (st.creditCost ?? 0),
+        0
+      );
+      if (streamedCredits > 0) {
+        logCredits("sse_metadata", {
+          runId,
+          streamedTotal: formatCreditsMicro(streamedCredits),
+          completedNodes: Object.values(nodeStates).filter((s) => s.status === "completed")
+            .length,
+        });
       }
 
       // Update the root run's metadata so the frontend gets the latest node run status immediately
@@ -980,7 +1002,18 @@ export const workflowOrchestratorTask = task({
           const holdAmount = await getRunHoldAmount(runId);
           const actualCost = terminalRuns.reduce((sum, r) => sum + (r.creditCost ?? 0), 0);
           await reconcileWorkflowCredits(run.userId, runId, actualCost, holdAmount);
-          logger.info(`[Coordinator] Credits reconciled for run ${runId}. Hold: ${holdAmount}, Actual: ${actualCost}`);
+          logCredits("reconcile_complete", {
+            runId,
+            hold: formatCreditsMicro(holdAmount),
+            actual: formatCreditsMicro(actualCost),
+            refund:
+              holdAmount > actualCost
+                ? formatCreditsMicro(holdAmount - actualCost)
+                : "0.00M",
+          });
+          logger.info(
+            `[Coordinator] Credits reconciled for run ${runId}. Hold: ${holdAmount}, Actual: ${actualCost}`
+          );
         } catch (creditErr) {
           logger.error(`[Coordinator] Failed to reconcile credits for run ${runId}: ${creditErr}`);
         }

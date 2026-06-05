@@ -96,6 +96,9 @@ vi.mock("../lib/credits", () => ({
   checkNextLayerWithinHold: vi.fn().mockResolvedValue({ ok: true }),
   // getRunHoldAmount reads the credit ledger hold entry — mock returns 10M microcredits.
   getRunHoldAmount: vi.fn().mockResolvedValue(10_000_000),
+  // Structured credit logging — no-op in tests.
+  logCredits: vi.fn(),
+  formatCreditsMicro: (micro: number) => String(micro),
 }));
 
 import { notifyCoordinator } from "../trigger/utils";

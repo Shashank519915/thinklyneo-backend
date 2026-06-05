@@ -7,6 +7,23 @@ import { estimateWorkflowCostMicrocredits } from "@shashank519915/shared";
 
 const INITIAL_GRANT_MICROCREDITS = 100000000; // 100.00 credits
 
+/** Human-readable microcredit amount for logs (e.g. "1.45M"). */
+export function formatCreditsMicro(micro: number): string {
+  return `${(micro / 1_000_000).toFixed(2)}M`;
+}
+
+/** Structured credit event log — visible in API routes and Trigger.dev task output. */
+export function logCredits(
+  event: string,
+  details: Record<string, string | number | boolean | null | undefined>
+): void {
+  const parts = Object.entries(details)
+    .filter(([, v]) => v !== undefined && v !== null)
+    .map(([k, v]) => `${k}=${v}`)
+    .join(" ");
+  console.log(`[Credits] ${event}${parts ? ` | ${parts}` : ""}`);
+}
+
 /**
  * Gets the current balance for a user. If no balance exists, initializes a default balance
  * of 100 credits and logs an initial_grant transaction.
@@ -108,6 +125,14 @@ export async function placeCreditHold(
         balanceAfter: nextBalance,
       },
     });
+
+    logCredits("hold_placed", {
+      runId,
+      userId,
+      holdMicro: amount,
+      hold: formatCreditsMicro(amount),
+      balanceAfter: formatCreditsMicro(nextBalance),
+    });
   });
 }
 
@@ -169,9 +194,25 @@ export async function checkNextLayerWithinHold(
     return { ok: true, holdAmount, actualCost, remainingHold, layerCost: 0 };
   }
 
+  logCredits("layer_check", {
+    runId,
+    hold: formatCreditsMicro(holdAmount),
+    spent: formatCreditsMicro(actualCost),
+    remaining: formatCreditsMicro(remainingHold),
+    nextLayer: formatCreditsMicro(layerCost),
+    nodes: readyNodes.length,
+  });
+
   if (layerCost > remainingHold) {
     const needM = (layerCost / 1_000_000).toFixed(2);
     const remainM = (Math.max(0, remainingHold) / 1_000_000).toFixed(2);
+    logCredits("layer_check_failed", {
+      runId,
+      hold: formatCreditsMicro(holdAmount),
+      spent: formatCreditsMicro(actualCost),
+      remaining: formatCreditsMicro(remainingHold),
+      nextLayer: formatCreditsMicro(layerCost),
+    });
     return {
       ok: false,
       holdAmount,
@@ -211,6 +252,12 @@ export async function reconcileWorkflowCredits(
           balanceAfter: nextBalance,
         },
       });
+      logCredits("deduction_direct", {
+        runId,
+        userId,
+        amount: formatCreditsMicro(actualCost),
+        balanceAfter: formatCreditsMicro(nextBalance),
+      });
     });
     return;
   }
@@ -242,6 +289,14 @@ export async function reconcileWorkflowCredits(
       },
     });
 
+    logCredits("deduction", {
+      runId,
+      userId,
+      hold: formatCreditsMicro(holdAmount),
+      actual: formatCreditsMicro(actualCost),
+      balanceAfter: formatCreditsMicro(finalBalance),
+    });
+
     // If hold was greater than actual cost, log a refund entry for clarity
     if (holdAmount > actualCost) {
       const refundAmount = holdAmount - actualCost;
@@ -254,6 +309,14 @@ export async function reconcileWorkflowCredits(
           runId,
           balanceAfter: finalBalance,
         },
+      });
+      logCredits("refund", {
+        runId,
+        userId,
+        amount: formatCreditsMicro(refundAmount),
+        hold: formatCreditsMicro(holdAmount),
+        actual: formatCreditsMicro(actualCost),
+        balanceAfter: formatCreditsMicro(finalBalance),
       });
     } else if (actualCost > holdAmount) {
       // If actual cost was somehow larger than the hold (e.g. dynamic settings modified),
@@ -268,6 +331,14 @@ export async function reconcileWorkflowCredits(
           runId,
           balanceAfter: finalBalance,
         },
+      });
+      logCredits("deduction_extra", {
+        runId,
+        userId,
+        amount: formatCreditsMicro(extraDeduction),
+        hold: formatCreditsMicro(holdAmount),
+        actual: formatCreditsMicro(actualCost),
+        balanceAfter: formatCreditsMicro(finalBalance),
       });
     }
   });
