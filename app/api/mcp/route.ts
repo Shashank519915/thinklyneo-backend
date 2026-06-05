@@ -3,7 +3,8 @@
  *
  * Lets Cursor / Claude Desktop connect to Galaxy with just a URL + Bearer API key —
  * no local clone, no script path, no database. Reachable at:
- *   https://galaxy-temp-frontend.vercel.app/api/mcp   (frontend rewrites /api/* → backend)
+ *   https://galaxy-temp-frontend.vercel.app/api/mcp   (frontend rewrites /api/* → backend; /api/mcp bypasses Clerk)
+ *   https://galaxy-temp-backend.vercel.app/api/mcp    (direct backend — works without frontend deploy)
  *
  * Stateless JSON-RPC over POST: each tool call proxies to the same public REST API
  * (`/api/v1/...`) forwarding the caller's `Authorization: Bearer gx_...` header, so
@@ -207,6 +208,11 @@ async function callTool(
 function resolveApiOrigin(request: Request): string {
   const override = process.env.GALAXY_API_ORIGIN;
   if (override) return override.replace(/\/$/, "");
+  const forwardedHost = request.headers.get("x-forwarded-host");
+  if (forwardedHost) {
+    const proto = request.headers.get("x-forwarded-proto") ?? "https";
+    return `${proto}://${forwardedHost.split(",")[0]?.trim()}`;
+  }
   return new URL(request.url).origin;
 }
 
@@ -295,13 +301,27 @@ export async function POST(request: Request) {
   return NextResponse.json(Array.isArray(payload) ? responses : responses[0]);
 }
 
-/**
- * This server is stateless and does not offer a server→client SSE stream, so a GET
- * (used by clients to open the optional notification channel) returns 405 per the spec.
- */
+/** Stateless MCP — JSON-RPC over POST only. GET returns a clear JSON error (not HTML 404). */
 export function GET() {
   return NextResponse.json(
     rpcError(null, -32601, "This MCP endpoint is stateless; use POST for JSON-RPC."),
-    { status: 405, headers: { Allow: "POST" } }
+    {
+      status: 405,
+      headers: {
+        Allow: "POST, OPTIONS",
+        "Content-Type": "application/json",
+      },
+    }
   );
+}
+
+export function OPTIONS() {
+  return new Response(null, {
+    status: 204,
+    headers: {
+      Allow: "POST, GET, OPTIONS",
+      "Access-Control-Allow-Methods": "POST, GET, OPTIONS",
+      "Access-Control-Allow-Headers": "Content-Type, Authorization, Mcp-Session-Id",
+    },
+  });
 }
