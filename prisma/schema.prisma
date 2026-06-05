@@ -97,11 +97,14 @@ model CreditLedger {
 }
 
 model ApiKey {
-  id        String   @id @default(cuid())
-  userId    String
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  name      String
-  keyId     String   @unique
-  maskedKey String
-  createdAt DateTime @default(now())
+  id               String    @id @default(cuid())
+  userId           String
+  user             User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name             String
+  keyId            String    @unique
+  maskedKey        String
+  rateLimitPerMin  Int       @default(60)
+  rateLimitPerDay  Int       @default(1000)
+  expiresAt        DateTime?
+  createdAt        DateTime  @default(now())
 }

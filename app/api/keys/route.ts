@@ -1,6 +1,10 @@
 import { auth } from "@clerk/nextjs/server";
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import {
+  buildUnkeyRatelimits,
+  toUnkeyExpires,
+} from "@/lib/unkey-api-keys";
 import crypto from "crypto";
 
 /**
@@ -37,9 +41,34 @@ export async function POST(request: Request) {
   }
 
   try {
+    const existingCount = await prisma.apiKey.count({ where: { userId } });
+    if (existingCount >= 10) {
+      return NextResponse.json(
+        { error: "Maximum of 10 API keys allowed" },
+        { status: 400 }
+      );
+    }
+
     const body = await request.json().catch(() => ({}));
-    const name = body.name || "Default Key";
-    const rateLimit = body.rateLimit || 60; // Requests per minute
+    const name = (typeof body.name === "string" && body.name.trim()) || "Default";
+    const rateLimitPerMin = Number(body.rateLimitPerMin ?? body.rateLimit ?? 60);
+    const rateLimitPerDay = Number(body.rateLimitPerDay ?? 1000);
+    const expiresAt =
+      body.expiresAt && typeof body.expiresAt === "string"
+        ? new Date(body.expiresAt)
+        : null;
+
+    if (!Number.isFinite(rateLimitPerMin) || rateLimitPerMin < 1 || rateLimitPerMin > 60) {
+      return NextResponse.json({ error: "Per-minute limit must be 1–60" }, { status: 400 });
+    }
+    if (!Number.isFinite(rateLimitPerDay) || rateLimitPerDay < 1) {
+      return NextResponse.json({ error: "Per-day limit must be at least 1" }, { status: 400 });
+    }
+    if (expiresAt && Number.isNaN(expiresAt.getTime())) {
+      return NextResponse.json({ error: "Invalid expiration date" }, { status: 400 });
+    }
+
+    const rateLimit = Math.floor(rateLimitPerMin);
 
     const rootKey = process.env.UNKEY_ROOT_KEY;
     const apiId = process.env.UNKEY_API_ID || process.env.UNKEY_API_KEY;
@@ -58,14 +87,13 @@ export async function POST(request: Request) {
           name,
           prefix: "gx",
           externalId: userId,
-          ratelimits: [
-            {
-              name: "requests",
-              limit: rateLimit,
-              duration: 60000,
-              autoApply: true,
-            }
-          ]
+          ...(expiresAt && !Number.isNaN(expiresAt.getTime())
+            ? { expires: toUnkeyExpires(expiresAt) }
+            : {}),
+          ratelimits: buildUnkeyRatelimits(
+            rateLimit,
+            Math.floor(rateLimitPerDay)
+          ),
         });
 
         if (createResp.data) {
@@ -92,6 +120,9 @@ export async function POST(request: Request) {
         name,
         keyId,
         maskedKey,
+        rateLimitPerMin: rateLimit,
+        rateLimitPerDay: Math.floor(rateLimitPerDay),
+        expiresAt: expiresAt && !Number.isNaN(expiresAt.getTime()) ? expiresAt : null,
       },
     });
 
@@ -100,8 +131,11 @@ export async function POST(request: Request) {
         id: keyRecord.id,
         name: keyRecord.name,
         maskedKey: keyRecord.maskedKey,
+        rateLimitPerMin: keyRecord.rateLimitPerMin,
+        rateLimitPerDay: keyRecord.rateLimitPerDay,
+        expiresAt: keyRecord.expiresAt,
         createdAt: keyRecord.createdAt,
-        key: keyString, // Only return keyString ONCE on creation!
+        key: keyString,
       },
     }, { status: 201 });
   } catch (error) {
