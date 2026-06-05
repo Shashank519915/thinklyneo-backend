@@ -20,7 +20,7 @@ public REST API (`/api/v1`), OpenAPI 3.1 docs, and an MCP server for AI assistan
 - Public REST API with Unkey or local API keys
 - OpenAPI 3.1 docs and interactive playground (`/docs`)
 - Outbound Svix-style webhooks
-- MCP server (hosted HTTP + local StdIO)
+- MCP server (hosted Streamable HTTP)
 
 ## Repositories
 

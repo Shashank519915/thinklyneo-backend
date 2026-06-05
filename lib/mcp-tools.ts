@@ -130,7 +130,7 @@ export const MCP_TOOLS = [
   {
     name: "update_workflow",
     description:
-      "Update an existing Galaxy workflow's name, description, nodes, and/or edges. Use after create_workflow to customize the graph, or to patch metadata. Graph must keep requestInputs and response nodes.",
+      "Update an existing Galaxy workflow's name, description, nodes, and/or edges. Prefer add_node / connect_nodes / update_node for graph edits — they validate handles, prevent cycles, and set correct edge rendering. Only pass raw nodes/edges arrays here when doing a full atomic graph replacement (e.g. migrating all fields at once). If you pass edges, each edge must include { id, source, sourceHandle, target, targetHandle } — rendering fields (type, markerEnd, data) are auto-filled server-side. Graph must keep requestInputs and response nodes.",
     inputSchema: {
       type: "object",
       properties: {
@@ -144,7 +144,7 @@ export const MCP_TOOLS = [
         },
         edges: {
           type: "array",
-          description: "Full edges array connecting nodes.",
+          description: "Full edges array. Each edge needs { id, source, sourceHandle, target, targetHandle }. Do NOT use this to add individual edges — use connect_nodes instead, which validates handles and prevents cycles.",
           items: { type: "object" },
         },
       },

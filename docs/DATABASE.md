@@ -78,7 +78,7 @@ One execution of a workflow.
 | `workflowId` | `String` | FK → `Workflow` (cascade delete) |
 | `userId` | `String` | Denormalized for queries / ownership |
 | `scope` | `String` | `full` \| `partial` \| `single` |
-| `status` | `String` | `success` \| `failed` \| `partial` |
+| `status` | `String` | `success` \| `failed` \| `partial` \| `canceled` |
 | `startedAt` | `DateTime` | Default now |
 | `finishedAt` | `DateTime?` | Set on completion |
 | `durationMs` | `Int?` | End-to-end run duration |
@@ -164,6 +164,9 @@ Dashboard-created API keys for `/api/v1` when not using Unkey-only keys.
 | `keyId` | `String` unique | Public key id |
 | `maskedKey` | `String` | Display mask (e.g. `gx_…xxxx`) |
 | `name` | `String` | User label |
+| `rateLimitPerMin` | `Int` | Default 60 |
+| `rateLimitPerDay` | `Int` | Default 1000 |
+| `expiresAt` | `DateTime?` | Optional expiry |
 
 `verifyApiRequest` may use Unkey (`UNKEY_ROOT_KEY`) or SHA-256 hash lookup against stored key material (mock keys `gx_mock_*`). Raw secrets are not stored in plaintext in this table for production keys.
 

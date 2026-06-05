@@ -36,6 +36,32 @@ export interface GraphEdge {
   sourceHandle?: string | null;
   targetHandle?: string | null;
   type?: string;
+  data?: Record<string, unknown>;
+  markerEnd?: Record<string, unknown>;
+}
+
+/**
+ * Ensure a raw edge (e.g. from update_workflow PUT body) has the React Flow fields
+ * required for correct canvas rendering: `type`, `data.color`, and `markerEnd`.
+ * Safe to call on already-normalized edges — only fills missing fields.
+ */
+export function normalizeEdge(edge: GraphEdge, nodes: GraphNode[]): GraphEdge {
+  if (edge.type && edge.data && edge.markerEnd) return edge;
+
+  const sourceNode = nodes.find((n) => n.id === edge.source);
+  const color = sourceNode ? resolveEdgeColor(sourceNode, edge.sourceHandle ?? "") : "#7C3AED";
+
+  return {
+    ...edge,
+    type: edge.type ?? "animatedEdge",
+    data: edge.data ?? { color },
+    markerEnd: edge.markerEnd ?? {
+      type: "arrowclosed",
+      color,
+      width: 16,
+      height: 16,
+    },
+  };
 }
 
 export type GraphOp =
@@ -211,6 +237,35 @@ function applyUpdateNode(nodes: GraphNode[], op: Extract<GraphOp, { op: "updateN
   return { op: "updateNode", nodeId: op.nodeId, message: `Updated "${op.nodeId}".` };
 }
 
+// Handle type → edge stroke color (mirrors frontend lib/utils HANDLE_COLORS).
+const HANDLE_TYPE_COLORS: Record<string, string> = {
+  image:   "#F97316",
+  text:    "#F59E0B",
+  video:   "#10B981",
+  audio:   "#EC4899",
+  number:  "#EC4899",
+  boolean: "#6366F1",
+  generic: "#3B82F6",
+};
+
+/**
+ * Derive the edge stroke/arrow color from the source node's output handle definition.
+ * Falls back to a neutral purple if the handle or definition is not found.
+ */
+function resolveEdgeColor(sourceNode: GraphNode, sourceHandle: string): string {
+  // Request-Inputs fields don't have a typed output — use neutral color.
+  if (sourceNode.type === "requestInputs") return "#7C3AED";
+
+  if (sourceHandle.startsWith("out:")) {
+    const key = sourceHandle.slice(4);
+    const def = defFor(sourceNode.type);
+    const output = def?.outputs?.find((o) => o.key === key);
+    if (output?.handle?.color) return output.handle.color as string;
+    if (output?.type && HANDLE_TYPE_COLORS[output.type]) return HANDLE_TYPE_COLORS[output.type];
+  }
+  return "#7C3AED";
+}
+
 function applyConnectNodes(
   nodes: GraphNode[],
   edges: GraphEdge[],
@@ -247,6 +302,11 @@ function applyConnectNodes(
 
   const taken = new Set(edges.map((e) => e.id));
   const id = uniqueId(`edge-${op.source}-${op.target}`, taken);
+
+  // Resolve edge color from the source output handle so the frontend renders
+  // the arrowhead and stroke in the correct type color (same as manual onConnect).
+  const edgeColor = resolveEdgeColor(sourceNode, op.sourceHandle);
+
   edges.push({
     id,
     source: op.source,
@@ -254,6 +314,13 @@ function applyConnectNodes(
     sourceHandle: op.sourceHandle,
     targetHandle: op.targetHandle,
     type: "animatedEdge",
+    data: { color: edgeColor },
+    markerEnd: {
+      type: "arrowclosed",
+      color: edgeColor,
+      width: 16,
+      height: 16,
+    },
   });
   return { op: "connectNodes", edgeId: id, message: `Connected ${op.source}:${op.sourceHandle} → ${op.target}:${op.targetHandle}.` };
 }

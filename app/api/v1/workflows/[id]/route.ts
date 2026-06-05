@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { verifyApiRequest } from "@/lib/api-auth";
 import { updateWorkflowSchema } from "@/lib/validation";
+import { normalizeEdge, type GraphEdge, type GraphNode } from "@/lib/mcp/graph-ops";
 
 /**
  * GET /api/v1/workflows/:id
@@ -87,7 +88,13 @@ export async function PUT(
         ...(parsed.data.name !== undefined && { name: parsed.data.name }),
         ...(parsed.data.description !== undefined && { description: parsed.data.description }),
         ...(parsed.data.nodes !== undefined && { nodes: parsed.data.nodes }),
-        ...(parsed.data.edges !== undefined && { edges: parsed.data.edges }),
+        ...(parsed.data.edges !== undefined && {
+          // Normalize raw edges so they always carry type/markerEnd/data.color
+          // regardless of whether the agent used connect_nodes or update_workflow.
+          edges: (parsed.data.edges as GraphEdge[]).map((e) =>
+            normalizeEdge(e, (parsed.data.nodes ?? []) as GraphNode[])
+          ) as any,
+        }),
         ...(parsed.data.status !== undefined && { status: parsed.data.status }),
       },
     });

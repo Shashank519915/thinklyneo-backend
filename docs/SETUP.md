@@ -108,4 +108,4 @@ pnpm typecheck && pnpm lint && pnpm test
 - [ENVIRONMENT.md](./ENVIRONMENT.md)
 - [DATABASE.md](./DATABASE.md)
 - [SYSTEM_DEEP_DIVE.md](./SYSTEM_DEEP_DIVE.md)
-- [MCP_SETUP.md](./MCP_SETUP.md) — local MCP StdIO
+- [MCP_SETUP.md](./MCP_SETUP.md) — hosted MCP setup

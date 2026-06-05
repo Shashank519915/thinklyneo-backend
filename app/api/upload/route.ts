@@ -1,6 +1,7 @@
 /**
  * @fileoverview Authenticated file upload endpoint: persists uploads to cloud storage via Transloadit.
  * Uses memory-only REST API uploads to remain compatible with serverless environments.
+ * this upload is used by our backend to upload files to Transloadit for permanent storage. and the libtransloadit is used by our mcp server to upload files to Transloadit for permanent storage. So these are not DRY vviolations.
  */
 
 import { auth } from "@clerk/nextjs/server";

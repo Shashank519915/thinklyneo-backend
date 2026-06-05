@@ -74,8 +74,6 @@ Mid-run: `checkNextLayerWithinHold` before each layer.
 
 Registry: `shared/src/definitions/registry.ts`.
 
-**Full audit + verification:** [interview/07-CREDIT-SYSTEM-AUDIT.md](../../interview/07-CREDIT-SYSTEM-AUDIT.md) (Vitest 32/32, manual checklist, known gaps).
-
 ---
 
 ## Input limits

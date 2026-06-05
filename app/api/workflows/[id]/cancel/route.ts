@@ -1,10 +1,18 @@
 /**
  * @fileoverview API route to cancel an ongoing Trigger.dev orchestrator run.
+ *
+ * Order matters for Trigger.dev safety:
+ *  1. Flip run status → "canceled" + mark in-flight node runs "skipped" (atomic).
+ *     The orchestrator coordinator checks run.status !== "running" and short-circuits,
+ *     so it will not finalize or reconcile again after we cancel the Trigger run.
+ *  2. Cancel the Trigger.dev orchestrator run (best-effort).
+ *  3. Reconcile credits: release hold, charge only completed node costs, refund rest.
  */
 
 import { auth } from "@clerk/nextjs/server";
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { reconcileWorkflowCredits } from "@/lib/credits";
 
 export async function POST(
   request: Request,
@@ -18,7 +26,6 @@ export async function POST(
   const { id } = await params;
 
   try {
-    // Find the currently running workflow run
     const runningRun = await prisma.workflowRun.findFirst({
       where: { workflowId: id, userId, status: "running" },
     });
@@ -30,33 +37,50 @@ export async function POST(
       );
     }
 
+    // 1. Atomically flip status away from "running" so the orchestrator
+    //    coordinator short-circuits, and mark in-flight node runs as skipped.
+    await prisma.$transaction([
+      prisma.workflowRun.update({
+        where: { id: runningRun.id },
+        data: { status: "canceled", finishedAt: new Date() },
+      }),
+      prisma.workflow.update({
+        where: { id },
+        data: { status: "idle" },
+      }),
+      prisma.nodeRun.updateMany({
+        where: { runId: runningRun.id, status: { in: ["pending", "running"] } },
+        data: { status: "skipped" },
+      }),
+    ]);
+
+    // 2. Cancel the Trigger.dev orchestrator run (best-effort — DB is already clean).
     if (runningRun.orchestratorRunId) {
-      // Import Trigger.dev SDK to cancel the task
       const { runs } = await import("@trigger.dev/sdk/v3");
-      
       try {
         await runs.cancel(runningRun.orchestratorRunId);
         console.log(`[Cancel] Cancelled orchestrator run ${runningRun.orchestratorRunId}`);
       } catch (triggerError) {
-        console.error("[Cancel] Trigger.dev cancellation failed:", triggerError);
-        // We continue anyway to clean up our local database state.
+        console.error("[Cancel] Trigger.dev cancellation failed (DB already clean):", triggerError);
       }
     }
 
-    // Mark the run as failed in the database
-    await prisma.workflowRun.update({
-      where: { id: runningRun.id },
-      data: {
-        status: "failed",
-        finishedAt: new Date(),
-      },
+    // 3. Reconcile credits: release hold, charge only successful node costs.
+    const holdLedger = await prisma.creditLedger.findFirst({
+      where: { runId: runningRun.id, type: "hold" },
+      orderBy: { createdAt: "desc" },
     });
+    const holdAmount = holdLedger ? Math.abs(holdLedger.amount) : 0;
 
-    // Mark the workflow as idle
-    await prisma.workflow.update({
-      where: { id },
-      data: { status: "idle" },
+    const successfulNodes = await prisma.nodeRun.findMany({
+      where: { runId: runningRun.id, status: "success" },
+      select: { creditCost: true },
     });
+    const actualCost = successfulNodes.reduce((sum, n) => sum + (n.creditCost ?? 0), 0);
+
+    if (holdAmount > 0 || actualCost > 0) {
+      await reconcileWorkflowCredits(userId, runningRun.id, actualCost, holdAmount);
+    }
 
     return NextResponse.json({ success: true, runId: runningRun.id });
   } catch (error) {
