@@ -1,6 +1,6 @@
 # Setup Guide (Backend)
 
-Local development for **galaxy-temp-backend**. Companion UI: **galaxy-temp-frontend**. Env vars: [ENVIRONMENT.md](./ENVIRONMENT.md).
+Local development for **thinkly-backend**. Companion UI: **thinkly-frontend**. Env vars: [ENVIRONMENT.md](./ENVIRONMENT.md).
 
 ---
 
@@ -30,7 +30,7 @@ API: `http://localhost:3000`
 
 ## Full stack with frontend
 
-Clone **galaxy-temp-frontend** alongside this repo.
+Clone **thinkly-frontend** alongside this repo.
 
 ```bash
 # Backend (this repo)
@@ -42,7 +42,7 @@ pnpm dev
 npx trigger.dev@latest dev
 
 # Frontend (sibling repo)
-cd ../galaxy-temp-frontend
+cd ../thinkly-frontend
 pnpm install
 pnpm sync-shared    # copies shared/ from backend source — point script at backend if needed
 pnpm dev
@@ -72,7 +72,7 @@ Without `npx trigger.dev dev`, execute routes enqueue tasks but nothing processe
 
 ---
 
-## `@galaxy/shared`
+## `@thinkly/shared`
 
 Source of truth: `shared/` in this repo. Frontend mirrors it via `pnpm sync-shared` in the frontend repo after you change definitions.
 
@@ -81,7 +81,7 @@ Source of truth: `shared/` in this repo. Frontend mirrors it via `pnpm sync-shar
 ## Deploying Trigger workers
 
 ```bash
-pnpm --filter @galaxy/shared build
+pnpm --filter @thinkly/shared build
 npx trigger.dev deploy
 ```
 
@@ -91,7 +91,7 @@ CI: `.github/workflows/trigger-deploy.yml` on push to `main` (needs `TRIGGER_ACC
 
 ## Docs site (optional)
 
-**galaxy-docs** repo — `npx mintlify@latest dev`. Hosted at `/docs` on the frontend domain.
+**thinkly-docs** repo — `npx mintlify@latest dev`. Hosted at `/docs` on the frontend domain.
 
 ---
 

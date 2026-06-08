@@ -4,7 +4,7 @@ Secrets are split across three surfaces: **Vercel backend**, **Vercel frontend**
 
 ---
 
-## Backend (Vercel: `galaxy-temp-backend`)
+## Backend (Vercel: `thinkly-backend`)
 
 | Variable | Required | Purpose |
 |----------|----------|---------|
@@ -22,11 +22,11 @@ Secrets are split across three surfaces: **Vercel backend**, **Vercel frontend**
 | `UNKEY_API_KEY` | Optional | Unkey API id (code reads `UNKEY_API_ID` or `UNKEY_API_KEY`; else SHA-256 key table) |
 | `NEXT_PUBLIC_LINKEDIN_URL` | Optional | Footer link |
 | `TRIGGER_API_URL` | Optional | Defaults to `https://api.trigger.dev` |
-| `GALAXY_API_ORIGIN` | Optional | Override origin for hosted MCP route proxy |
+| `THINKLY_API_ORIGIN` | Optional | Override origin for hosted MCP route proxy |
 
 ---
 
-## Frontend (Vercel: `galaxy-temp-frontend`)
+## Frontend (Vercel: `thinkly-frontend`)
 
 | Variable | Required | Purpose |
 |----------|----------|---------|
@@ -76,8 +76,8 @@ Auto-deploys on push to `main` when `trigger/**`, `trigger.config.ts`, or `share
 
 | Variable | Purpose |
 |----------|---------|
-| `GALAXY_API_KEY` | Bearer key for MCP server/endpoint |
-| `GALAXY_BASE_URL` | Defaults to hosted frontend URL |
+| `THINKLY_API_KEY` | Bearer key for MCP server/endpoint |
+| `THINKLY_BASE_URL` | Defaults to hosted frontend URL |
 
 ---
 

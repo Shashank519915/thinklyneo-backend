@@ -9,7 +9,7 @@ import { prismaExtension } from "@trigger.dev/build/extensions/prisma";
 
 /** Registers `proj_*` id, 10m max duration budget, and `./trigger` discovery for deployable tasks. */
 export default defineConfig({
-  project: "proj_gmfmlgyvztqvrdinkuzi",
+  project: "proj_bwlirvjrzicjwtqpluzl",
   runtime: "node-22",
   logLevel: "log",
   maxDuration: 600, // 10 minutes max (orchestrator runs entire workflow DAG)

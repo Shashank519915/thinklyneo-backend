@@ -1,6 +1,6 @@
-# Galaxy MCP Server
+# Thinkly MCP Server
 
-Galaxy exposes a **hosted, stateless MCP server** over Streamable HTTP (JSON-RPC over POST).
+Thinkly exposes a **hosted, stateless MCP server** over Streamable HTTP (JSON-RPC over POST).
 Connect any MCP client (Cursor, Claude Desktop, …) with just a URL + a Bearer API key — no
 local clone, no script, no database connection.
 
@@ -10,8 +10,8 @@ local clone, no script, no database connection.
 ## Endpoint
 
 ```
-https://galaxy-temp-frontend.vercel.app/api/mcp   (frontend rewrites /api/* → backend; bypasses Clerk)
-https://galaxy-temp-backend.vercel.app/api/mcp    (direct backend)
+https://thinkly-frontend.vercel.app/api/mcp   (frontend rewrites /api/* → backend; bypasses Clerk)
+https://thinkly-backend.vercel.app/api/mcp    (direct backend)
 ```
 
 Each tool call proxies to the same public REST API (`/api/v1/...`) forwarding your
@@ -29,8 +29,8 @@ Dashboard → **API & Outbound Webhooks** → create a key (`gx_…`). Copy it o
 ```json
 {
   "mcpServers": {
-    "galaxy": {
-      "url": "https://galaxy-temp-frontend.vercel.app/api/mcp",
+    "thinkly": {
+      "url": "https://thinkly-frontend.vercel.app/api/mcp",
       "headers": { "Authorization": "Bearer gx_your_key_here" }
     }
   }

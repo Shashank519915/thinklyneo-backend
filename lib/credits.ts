@@ -44,6 +44,13 @@ export async function getOrCreateBalance(
 
   // Create default initial grant transactionally
   const result = await prisma.$transaction(async (tx) => {
+    // Ensure user exists first to satisfy foreign key constraints
+    await tx.user.upsert({
+      where: { id: userId },
+      update: {},
+      create: { id: userId }
+    });
+
     // Double-check inside transaction to avoid race conditions
     const innerExisting = await tx.creditBalance.findUnique({
       where: { userId },

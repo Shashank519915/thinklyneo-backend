@@ -18,6 +18,9 @@ function createInMemoryCreditsMock() {
   const ledger: LedgerEntry[] = [];
 
   const client = {
+    user: {
+      upsert: vi.fn(async () => ({})),
+    },
     creditBalance: {
       findUnique: vi.fn(async ({ where: { userId } }: { where: { userId: string } }) => {
         if (!balances.has(userId)) return null;

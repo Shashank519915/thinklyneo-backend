@@ -1,10 +1,10 @@
 /**
- * @fileoverview Hosted Galaxy MCP server (Streamable HTTP transport).
+ * @fileoverview Hosted Thinkly MCP server (Streamable HTTP transport).
  *
- * Lets Cursor / Claude Desktop connect to Galaxy with just a URL + Bearer API key —
+ * Lets Cursor / Claude Desktop connect to Thinkly with just a URL + Bearer API key —
  * no local clone, no script path, no database. Reachable at:
- *   https://galaxy-temp-frontend.vercel.app/api/mcp   (frontend rewrites /api/* → backend; /api/mcp bypasses Clerk)
- *   https://galaxy-temp-backend.vercel.app/api/mcp    (direct backend — works without frontend deploy)
+ *   https://thinkly-frontend.vercel.app/api/mcp   (frontend rewrites /api/* → backend; /api/mcp bypasses Clerk)
+ *   https://thinkly-backend.vercel.app/api/mcp    (direct backend — works without frontend deploy)
  *
  * Stateless JSON-RPC over POST: each tool call proxies to the same public REST API
  * (`/api/v1/...`) forwarding the caller's `Authorization: Bearer gx_...` header, so
@@ -13,8 +13,8 @@
  * Cursor `~/.cursor/mcp.json`:
  * {
  *   "mcpServers": {
- *     "galaxy": {
- *       "url": "https://galaxy-temp-frontend.vercel.app/api/mcp",
+ *     "thinkly": {
+ *       "url": "https://thinkly-frontend.vercel.app/api/mcp",
  *       "headers": { "Authorization": "Bearer gx_your_key_here" }
  *     }
  *   }
@@ -34,7 +34,7 @@ export const dynamic = "force-dynamic";
 
 const DEFAULT_PROTOCOL_VERSION = "2025-06-18";
 
-const SERVER_INFO = { name: "galaxy-mcp-server", version: "1.0.0" } as const;
+const SERVER_INFO = { name: "thinkly-mcp-server", version: "1.0.0" } as const;
 
 type JsonRpcId = string | number | null;
 
@@ -452,7 +452,7 @@ async function callTool(
 
 /** Resolve the origin used for self-proxying to /api/v1 (override via env when behind a proxy). */
 function resolveApiOrigin(request: Request): string {
-  const override = process.env.GALAXY_API_ORIGIN;
+  const override = process.env.THINKLY_API_ORIGIN;
   if (override) return override.replace(/\/$/, "");
   const forwardedHost = request.headers.get("x-forwarded-host");
   if (forwardedHost) {

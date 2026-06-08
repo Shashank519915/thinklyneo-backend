@@ -1,5 +1,5 @@
 /**
- * @fileoverview Agent-facing node catalog for the Galaxy MCP server.
+ * @fileoverview Agent-facing node catalog for the Thinkly MCP server.
  *
  * This module is READ-ONLY over the shared package (`@shashank519915/shared`). It never
  * mutates definitions and is deliberately kept out of the `shared` dist so that changing

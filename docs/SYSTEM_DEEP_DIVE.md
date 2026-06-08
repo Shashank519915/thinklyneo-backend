@@ -1,6 +1,6 @@
 # System Deep Dive
 
-Architecture reference for the Galaxy platform. Code paths below are relative to **galaxy-temp-backend** unless noted.
+Architecture reference for the Thinkly platform. Code paths below are relative to **thinkly-backend** unless noted.
 
 ---
 
@@ -32,7 +32,7 @@ Frontend (companion repo): `useRealtimeRun`, `restoreLiveRun`, canvas in `app/wo
 
 Config-driven provider fallback (work trial Req 7):
 
-- Each executable node declares ordered `providers[]` in `@galaxy/shared`.
+- Each executable node declares ordered `providers[]` in `@thinkly/shared`.
 - `runProviderChain` tries providers in order; failures log to `providerAttempts` on `NodeRun`.
 - Executor kinds: `openrouter`, `webhook-sim`, `ffmpeg` (task-local), `stub`.
 - The orchestrator is **provider-transparent** — dispatches by `node.type` only.
@@ -81,7 +81,7 @@ Registry: `shared/src/definitions/registry.ts`.
 | Moment | Where |
 |--------|--------|
 | Upload | `app/api/upload/route.ts` — file size + **sharp** image dimensions |
-| Pre-run sync | `@galaxy/shared` `validateWorkflowInputsSync` (frontend Run click) |
+| Pre-run sync | `@thinkly/shared` `validateWorkflowInputsSync` (frontend Run click) |
 | Server execute | `lib/validate-input-limits.ts` — sync rules + HEAD `Content-Length` |
 
 Video duration is declared in `platform-limits.ts` but not probed pre-run.

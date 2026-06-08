@@ -5,7 +5,7 @@ import { describe, it, expect } from "vitest";
 import { POST } from "@/app/api/mcp/route";
 
 async function postMcp(body: unknown, headers: Record<string, string> = {}) {
-  const request = new Request("https://galaxy-temp-backend.vercel.app/api/mcp", {
+  const request = new Request("https://thinkly-backend.vercel.app/api/mcp", {
     method: "POST",
     headers: { "Content-Type": "application/json", ...headers },
     body: JSON.stringify(body),
@@ -75,16 +75,16 @@ describe("POST /api/mcp", () => {
       params: { protocolVersion: "2025-06-18" },
     });
     const result = data.result as { serverInfo?: { name: string }; instructions?: string };
-    expect(result?.serverInfo?.name).toBe("galaxy-mcp-server");
+    expect(result?.serverInfo?.name).toBe("thinkly-mcp-server");
     expect(result?.instructions).toMatch(/create_workflow/i);
     expect(result?.instructions).toMatch(/do not create local files/i);
   });
 
-  it("create_workflow description steers agents to call Galaxy MCP", async () => {
+  it("create_workflow description steers agents to call Thinkly MCP", async () => {
     const data = await postMcp({ jsonrpc: "2.0", id: 4, method: "tools/list" });
     const tools = (data.result as { tools?: { name: string; description: string }[] })?.tools ?? [];
     const createWorkflow = tools.find((t) => t.name === "create_workflow");
-    expect(createWorkflow?.description).toMatch(/galaxy platform/i);
+    expect(createWorkflow?.description).toMatch(/thinkly platform/i);
     expect(createWorkflow?.description).toMatch(/do not build workflow files locally/i);
     expect(createWorkflow?.description).toMatch(/advertisement/i);
   });

@@ -110,8 +110,8 @@ export async function executeOpenRouterProvider(
     headers: {
       "Content-Type": "application/json",
       Authorization: `Bearer ${apiKey}`,
-      "HTTP-Referer": "https://nextflow-workflow.vercel.app",
-      "X-Title": "NextFlow Workflow Builder",
+      "HTTP-Referer": "https://thinkly-workflow.vercel.app",
+      "X-Title": "Thinkly Workflow Builder",
     },
     body: JSON.stringify(body),
     signal: ctx.signal,

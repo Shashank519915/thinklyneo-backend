@@ -1,6 +1,6 @@
 # Database
 
-Galaxy uses **PostgreSQL** (Neon in production) via **Prisma 7**. Schema: `prisma/schema.prisma`. Connection: `DATABASE_URL` on Vercel and in the Trigger.dev dashboard (workers read/write `NodeRun` and credits).
+Thinkly uses **PostgreSQL** (Neon in production) via **Prisma 7**. Schema: `prisma/schema.prisma`. Connection: `DATABASE_URL` on Vercel and in the Trigger.dev dashboard (workers read/write `NodeRun` and credits).
 
 ---
 
@@ -192,7 +192,7 @@ sequenceDiagram
     Orch->>Led: deduction + optional refund or extra deduction
 ```
 
-1. **Estimate** — sum of `credits.base` from `@galaxy/shared` for nodes in run scope (`registry.ts`).
+1. **Estimate** — sum of `credits.base` from `@thinkly/shared` for nodes in run scope (`registry.ts`).
 2. **Hold** — atomic decrement of `CreditBalance` + `hold` ledger row.
 3. **Actual** — sum of `NodeRun.creditCost` for successful nodes (failed nodes typically `0`).
 4. **Reconcile** — release hold, deduct actual, write `refund` or additional `deduction` if hold ≠ actual.

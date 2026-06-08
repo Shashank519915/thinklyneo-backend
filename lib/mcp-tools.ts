@@ -1,11 +1,11 @@
 /**
- * Shared Galaxy MCP tool manifest and server instructions.
+ * Shared Thinkly MCP tool manifest and server instructions.
  * Keep in sync across hosted HTTP (`app/api/mcp/route.ts`) and StdIO scripts.
  */
 
-export const MCP_SERVER_INSTRUCTIONS = `Galaxy MCP server — build and run AI media workflows on the Galaxy canvas platform (https://galaxy-temp-frontend.vercel.app).
+export const MCP_SERVER_INSTRUCTIONS = `Thinkly MCP server — build and run AI media workflows on the Thinkly canvas platform (https://thinkly-frontend.vercel.app).
 
-When the user mentions Galaxy, workflows, runs, nodes, or credits, ALWAYS use these MCP tools. Do NOT create local files, READMEs, or search the web as a substitute.
+When the user mentions Thinkly, workflows, runs, nodes, or credits, ALWAYS use these MCP tools. Do NOT create local files, READMEs, or search the web as a substitute.
 
 ═══ PICK THE RIGHT PATH ═══
 1) Reusable multi-step pipeline the user wants to save → BUILD: create_workflow → add_node/connect_nodes → start_run.
@@ -35,7 +35,7 @@ export const MCP_TOOLS = [
   {
     name: "list_node_types",
     description:
-      "Discover the node types available on the Galaxy canvas. Returns the 8 executable nodes (with input/output port handle IDs, tabs, categories, credit cost, output shape, and stub behavior) plus the two scaffold nodes (requestInputs, response) and the handle-naming conventions. Call this BEFORE building or editing a workflow graph. Optionally filter by category.",
+      "Discover the node types available on the Thinkly canvas. Returns the 8 executable nodes (with input/output port handle IDs, tabs, categories, credit cost, output shape, and stub behavior) plus the two scaffold nodes (requestInputs, response) and the handle-naming conventions. Call this BEFORE building or editing a workflow graph. Optionally filter by category.",
     inputSchema: {
       type: "object",
       properties: {
@@ -71,7 +71,7 @@ export const MCP_TOOLS = [
   {
     name: "list_workflows",
     description:
-      "List the authenticated user's Galaxy workflow canvases (metadata only: id, name, status, run count). Optional `search` filters by name (case-insensitive contains).",
+      "List the authenticated user's Thinkly workflow canvases (metadata only: id, name, status, run count). Optional `search` filters by name (case-insensitive contains).",
     inputSchema: {
       type: "object",
       properties: {
@@ -82,11 +82,11 @@ export const MCP_TOOLS = [
   {
     name: "get_workflow",
     description:
-      "Fetch the full nodes, edges, and metadata of a single Galaxy workflow by ID. Use when the user asks for workflow details or graph JSON.",
+      "Fetch the full nodes, edges, and metadata of a single Thinkly workflow by ID. Use when the user asks for workflow details or graph JSON.",
     inputSchema: {
       type: "object",
       properties: {
-        workflowId: { type: "string", description: "Galaxy workflow ID from list_workflows." },
+        workflowId: { type: "string", description: "Thinkly workflow ID from list_workflows." },
       },
       required: ["workflowId"],
     },
@@ -94,13 +94,13 @@ export const MCP_TOOLS = [
   {
     name: "create_workflow",
     description:
-      'Create a new workflow canvas on the Galaxy platform. ALWAYS call this when the user asks to create, add, or set up a workflow in Galaxy — do NOT build workflow files locally or search the web. Use template "advertisement" for ads/promotions/marketing (pre-built crop + LLM pipeline). Use template "empty" or omit for a blank canvas. Returns the new workflow id and full graph JSON.',
+      'Create a new workflow canvas on the Thinkly platform. ALWAYS call this when the user asks to create, add, or set up a workflow in Thinkly — do NOT build workflow files locally or search the web. Use template "advertisement" for ads/promotions/marketing (pre-built crop + LLM pipeline). Use template "empty" or omit for a blank canvas. Returns the new workflow id and full graph JSON.',
     inputSchema: {
       type: "object",
       properties: {
         name: {
           type: "string",
-          description: "Display name for the new Galaxy workflow (derive from the user's request).",
+          description: "Display name for the new Thinkly workflow (derive from the user's request).",
         },
         description: {
           type: "string",
@@ -130,11 +130,11 @@ export const MCP_TOOLS = [
   {
     name: "update_workflow",
     description:
-      "Update an existing Galaxy workflow's name, description, nodes, and/or edges. Prefer add_node / connect_nodes / update_node for graph edits — they validate handles, prevent cycles, and set correct edge rendering. Only pass raw nodes/edges arrays here when doing a full atomic graph replacement (e.g. migrating all fields at once). If you pass edges, each edge must include { id, source, sourceHandle, target, targetHandle } — rendering fields (type, markerEnd, data) are auto-filled server-side. Graph must keep requestInputs and response nodes.",
+      "Update an existing Thinkly workflow's name, description, nodes, and/or edges. Prefer add_node / connect_nodes / update_node for graph edits — they validate handles, prevent cycles, and set correct edge rendering. Only pass raw nodes/edges arrays here when doing a full atomic graph replacement (e.g. migrating all fields at once). If you pass edges, each edge must include { id, source, sourceHandle, target, targetHandle } — rendering fields (type, markerEnd, data) are auto-filled server-side. Graph must keep requestInputs and response nodes.",
     inputSchema: {
       type: "object",
       properties: {
-        workflowId: { type: "string", description: "Galaxy workflow ID to update." },
+        workflowId: { type: "string", description: "Thinkly workflow ID to update." },
         name: { type: "string", description: "New display name." },
         description: { type: "string", description: "New description." },
         nodes: {
@@ -164,7 +164,7 @@ export const MCP_TOOLS = [
   {
     name: "upload_file",
     description:
-      "Upload an image/video/audio/file to permanent Galaxy storage and get a stable URL to use in node inputs. Provide exactly one of: url (a public URL to fetch), data_uri (data:<mime>;base64,...), or base64 (+ mime). Use the returned URL with update_node. Only call when the user has actually provided media — never invent files.",
+      "Upload an image/video/audio/file to permanent Thinkly storage and get a stable URL to use in node inputs. Provide exactly one of: url (a public URL to fetch), data_uri (data:<mime>;base64,...), or base64 (+ mime). Use the returned URL with update_node. Only call when the user has actually provided media — never invent files.",
     inputSchema: {
       type: "object",
       properties: {
@@ -295,11 +295,11 @@ export const MCP_TOOLS = [
   {
     name: "start_run",
     description:
-      "Execute a Galaxy workflow. Provide workflowId OR workflowName (fuzzy-matched against the user's workflows, then system templates). REQUEST-FIELD DISCOVERY: if you call it WITHOUT inputValues and the workflow has Request-Inputs fields, it returns the field schema instead of running — call again with inputValues filled in. Deducts credits and runs in the background; returns a runId to poll with get_run_status.",
+      "Execute a Thinkly workflow. Provide workflowId OR workflowName (fuzzy-matched against the user's workflows, then system templates). REQUEST-FIELD DISCOVERY: if you call it WITHOUT inputValues and the workflow has Request-Inputs fields, it returns the field schema instead of running — call again with inputValues filled in. Deducts credits and runs in the background; returns a runId to poll with get_run_status.",
     inputSchema: {
       type: "object",
       properties: {
-        workflowId: { type: "string", description: "Galaxy workflow ID to execute." },
+        workflowId: { type: "string", description: "Thinkly workflow ID to execute." },
         workflowName: {
           type: "string",
           description: "Workflow name to fuzzy-match (used when workflowId is not given).",
@@ -325,7 +325,7 @@ export const MCP_TOOLS = [
   {
     name: "get_run_status",
     description:
-      "Poll the status and per-node results of a Galaxy workflow run. Call repeatedly until status is 'success' or 'failed'.",
+      "Poll the status and per-node results of a Thinkly workflow run. Call repeatedly until status is 'success' or 'failed'.",
     inputSchema: {
       type: "object",
       properties: {
@@ -364,7 +364,7 @@ export const MCP_TOOLS = [
   {
     name: "get_balance",
     description:
-      "Check the current Galaxy microcredit balance for the authenticated user. Use when the user asks about credits or balance in Galaxy.",
+      "Check the current Thinkly microcredit balance for the authenticated user. Use when the user asks about credits or balance in Thinkly.",
     inputSchema: { type: "object", properties: {} },
   },
 ] as const;

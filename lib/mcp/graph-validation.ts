@@ -2,7 +2,7 @@
  * @fileoverview Server-side graph connection validation for the MCP graph-editing tools.
  *
  * This is a backend-owned PORT of the canvas rules in
- * `galaxy-temp-frontend/lib/execution.ts` (cycle detection + handle type compatibility).
+ * `thinkly-frontend/lib/execution.ts` (cycle detection + handle type compatibility).
  * It is intentionally duplicated here (rather than added to the shared dist) so that the
  * Trigger.dev orchestrator and live workflow runs — which import the built shared package —
  * are NEVER affected by changes to MCP-side validation.
