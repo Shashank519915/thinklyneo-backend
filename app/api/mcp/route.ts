@@ -3,8 +3,8 @@
  *
  * Lets Cursor / Claude Desktop connect to Thinkly with just a URL + Bearer API key —
  * no local clone, no script path, no database. Reachable at:
- *   https://thinkly-frontend.vercel.app/api/mcp   (frontend rewrites /api/* → backend; /api/mcp bypasses Clerk)
- *   https://thinkly-backend.vercel.app/api/mcp    (direct backend — works without frontend deploy)
+ *   https://thinklyneo.vercel.app/api/mcp          (frontend rewrites /api/* → backend; /api/mcp bypasses Clerk)
+ *   https://thinklyneo-backend.vercel.app/api/mcp  (direct backend — works without frontend deploy)
  *
  * Stateless JSON-RPC over POST: each tool call proxies to the same public REST API
  * (`/api/v1/...`) forwarding the caller's `Authorization: Bearer gx_...` header, so
@@ -14,7 +14,7 @@
  * {
  *   "mcpServers": {
  *     "thinkly": {
- *       "url": "https://thinkly-frontend.vercel.app/api/mcp",
+ *       "url": "https://thinklyneo.vercel.app/api/mcp",
  *       "headers": { "Authorization": "Bearer gx_your_key_here" }
  *     }
  *   }
@@ -243,7 +243,7 @@ async function callTool(
           requestFields: args.requestFields,
         }),
       });
-      return textContent(`Workflow created:\n${JSON.stringify(workflow, null, 2)}`);
+      return textContent(workflow);
     }
 
     case "update_workflow": {
@@ -258,7 +258,7 @@ async function callTool(
         method: "PUT",
         body: JSON.stringify(patch),
       });
-      return textContent(`Workflow updated:\n${JSON.stringify(workflow, null, 2)}`);
+      return textContent(workflow);
     }
 
     case "add_node":
@@ -305,30 +305,76 @@ async function callTool(
       const run = (await apiFetch(origin, apiKey, "/runs", {
         method: "POST",
         body: JSON.stringify(body),
-      })) as { runId?: string; id?: string; status?: string };
+      })) as { runId?: string; id?: string; orchestratorRunId?: string; status?: string };
+      const runId = run.runId ?? run.id;
       return textContent({
-        runId: run.runId ?? run.id,
+        runId,
+        orchestratorRunId: run.orchestratorRunId ?? null,
+        workflowId,
         status: run.status ?? "running",
-        message: "Run started. Poll get_run_status(runId) until status is success / failed / partial.",
+        message:
+          "Run started. Poll get_run_status(runId). In Thinkly Brain chat, call pin_live_run with orchestratorRunId + workflowId.",
       });
     }
 
     case "get_run_status": {
       const runId = args.runId as string;
       if (!runId) throw new Error("runId is required.");
+      const includeOutputs = args.includeOutputs !== false;
       const run = (await apiFetch(origin, apiKey, `/runs/${runId}`)) as {
         id?: string;
         status?: string;
-        nodeRuns?: Array<{ nodeId: string; output?: unknown }>;
+        orchestratorRunId?: string;
+        workflowId?: string;
+        nodeRuns?: Array<{
+          nodeId: string;
+          status?: string;
+          output?: unknown;
+          error?: string;
+        }>;
       };
       const responseRun = (run.nodeRuns ?? []).find((nr) => nr.nodeId === "response");
       const stillRunning = run.status === "running";
+
+      const ephemeralWorkflowId =
+        typeof run.workflowId === "string" && run.workflowId.length > 0 ? run.workflowId : null;
+      if (
+        ephemeralWorkflowId &&
+        !stillRunning &&
+        (run.status === "success" || run.status === "failed" || run.status === "partial")
+      ) {
+        try {
+          const wf = (await apiFetch(origin, apiKey, `/workflows/${ephemeralWorkflowId}`)) as {
+            name?: string;
+          };
+          if (typeof wf.name === "string" && wf.name.startsWith("Generation:")) {
+            await apiFetch(origin, apiKey, `/workflows/${ephemeralWorkflowId}`, { method: "DELETE" });
+          }
+        } catch {
+          /* best-effort ephemeral cleanup */
+        }
+      }
+
       return textContent({
         runId: run.id ?? runId,
         status: run.status,
-        ...(stillRunning ? { hint: "Still running — call get_run_status again." } : {}),
+        orchestratorRunId: run.orchestratorRunId ?? null,
+        workflowId: run.workflowId ?? ephemeralWorkflowId,
+        ...(stillRunning
+          ? {
+              hint:
+                "Still running — call get_run_status again. Thinkly UI also supports Trigger.dev realtime via orchestratorRunId.",
+            }
+          : {}),
         responseOutput: responseRun?.output ?? null,
-        run,
+        nodeRuns: (run.nodeRuns ?? []).map((nr) => ({
+          nodeId: nr.nodeId,
+          status: nr.status,
+          error: nr.error ?? null,
+          ...(includeOutputs
+            ? { output: nr.output ?? null }
+            : { hasOutput: nr.output != null }),
+        })),
       });
     }
 
@@ -427,14 +473,17 @@ async function callTool(
       const run = (await apiFetch(origin, apiKey, "/runs", {
         method: "POST",
         body: JSON.stringify({ workflowId, inputValues: {} }),
-      })) as { runId?: string; id?: string; status?: string };
+      })) as { runId?: string; id?: string; orchestratorRunId?: string; status?: string };
 
       return textContent({
         runId: run.runId ?? run.id,
+        orchestratorRunId: run.orchestratorRunId ?? null,
         status: run.status ?? "running",
         workflowId,
         nodeId,
-        message: "One-shot generation started. Poll get_run_status(runId) for the result.",
+        ephemeralWorkflow: true,
+        message:
+          "One-shot generation started. Poll get_run_status(runId). Ephemeral workflow auto-deletes after terminal status.",
       });
     }
 
@@ -587,6 +636,7 @@ export function OPTIONS() {
       Allow: "POST, GET, OPTIONS",
       "Access-Control-Allow-Methods": "POST, GET, OPTIONS",
       "Access-Control-Allow-Headers": "Content-Type, Authorization, Mcp-Session-Id",
+      "Access-Control-Allow-Origin": "*",
     },
   });
 }

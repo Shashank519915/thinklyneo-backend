@@ -67,6 +67,27 @@ const GROUP_ORDER: Record<string, number> = {
 /** Target handles that AGGREGATE (array append) instead of last-write-wins on fan-in. */
 const FAN_IN_HANDLES = new Set(["in:image_urls", "in:video_urls", "in:audio_urls"]);
 
+/** Agent-facing notes when the same run-time concept maps to different input keys per node. */
+const NODE_WIRING_NOTES: Record<string, string[]> = {
+  klingV3: [
+    "Aspect ratio input key is `aspect_ratio` (label: Aspect Ratio) — NOT `size`. Allowed values exactly: 16:9, 9:16, 1:1.",
+    "Image-to-video workflows: wire run-time clip length to `in:duration` (image tab). Avoid also wiring `in:duration_text` (text tab duplicate).",
+    "When start_image_url is wired the canvas shows the image tab; `in:aspect_ratio` still resolves at run time even though the control is on the text tab.",
+  ],
+  gptImage2: [
+    "Output dimensions use input key `size` (label: Size) — NOT `aspect_ratio`. Copy exact `value` strings from this schema's size options.",
+    "To drive size from Request-Inputs: create a select_field whose selectOptions use the same value strings as `size` (e.g. 3840x2160), then wire to `in:size`.",
+    "Never wire 16:9 / 9:16 / 1:1 strings to `in:size` — they are invalid for this node.",
+  ],
+};
+
+/** Suggested cross-node mapping when the user picks an aspect ratio at run time. */
+export const ASPECT_TO_GPT_SIZE_MAPPING = [
+  { aspectRatio: "16:9", gptSize: "3840x2160", gptSizeAlternatives: ["2048x1152", "1536x1024"] },
+  { aspectRatio: "9:16", gptSize: "2160x3840", gptSizeAlternatives: ["1024x1536"] },
+  { aspectRatio: "1:1", gptSize: "2048x2048", gptSizeAlternatives: ["1024x1024"] },
+] as const;
+
 /**
  * Human description of a node's execution / fallback behavior, derived from its provider
  * chain. Kling v3 and GPT Image 2 have no live provider in this environment and therefore
@@ -100,7 +121,7 @@ function describeInput(param: NodeParameter) {
     ...(param.min !== undefined ? { min: param.min } : {}),
     ...(param.max !== undefined ? { max: param.max } : {}),
     ...(param.step !== undefined ? { step: param.step } : {}),
-    ...(param.options ? { options: param.options.map((o) => o.value) } : {}),
+    ...(param.options ? { options: param.options.map((o) => ({ label: o.label, value: o.value })) } : {}),
     ...(param.placeholder ? { placeholder: param.placeholder } : {}),
     ...(param.tooltip ? { tooltip: param.tooltip } : {}),
     ...(param.uiVariant ? { uiVariant: param.uiVariant } : {}),
@@ -174,6 +195,16 @@ export function buildNodeTypeSummary(def: NodeDefinition) {
 export function buildModelSchema(type: string) {
   const def = EXECUTABLE_NODE_DEFINITIONS[type];
   if (!def) return null;
+
+  const selectInputs = def.inputs
+    .filter((i) => i.options?.length)
+    .map((i) => ({
+      inputKey: i.key,
+      inputHandle: `in:${i.key}`,
+      label: i.label,
+      options: i.options!.map((o) => ({ label: o.label, value: o.value })),
+    }));
+
   return {
     type: def.type,
     name: def.name,
@@ -187,6 +218,16 @@ export function buildModelSchema(type: string) {
     limits: def.limits ?? {},
     behavior: describeStubBehavior(def),
     requiredInputs: def.inputs.filter((i) => i.required).map((i) => i.key),
+    ...(selectInputs.length > 0 ? { selectInputsExactValues: selectInputs } : {}),
+    ...(NODE_WIRING_NOTES[type] ? { wiringNotes: NODE_WIRING_NOTES[type] } : {}),
+    ...(type === "gptImage2"
+      ? {
+          aspectRatioCrosswalk: {
+            note: "Kling uses aspect_ratio (16:9|9:16|1:1). GPT Image 2 uses size (pixel dimensions). Use separate request fields or map values.",
+            suggestedMapping: ASPECT_TO_GPT_SIZE_MAPPING,
+          },
+        }
+      : {}),
   };
 }
 
@@ -214,15 +255,21 @@ export function buildScaffoldNodeSummaries() {
         "media_field",
         "file_field",
       ],
-      rules: "Exactly one per workflow. Cannot be deleted. Leave media field values null — the user uploads media later via upload_file, then update_node.",
+      selectFieldRules:
+        "select_field REQUIRES selectOptions: [{ label, value }] copied EXACTLY from get_model_schema (selectInputsExactValues / inputs[].options). Values must match the target node's input key — e.g. gptImage2 `in:size` wants 3840x2160, NOT 16:9. Prefer update_node defaults for node params the user does not need at run time. Wire fields you create to in:<key> handles, OR leave unwired as optional run-time context (harmless).",
+      fieldIdNamingRule:
+        "CRITICAL: Field IDs are parsed by splitting on '_' — the segment immediately after 'field_' MUST be the exact field type keyword (image|video|audio|media|file|number|boolean|select|text). Examples: field_image_photo ✓, field_image_ref ✓, field_video_clip ✓, field_text_prompt ✓. NEVER use descriptive words as the second segment if they accidentally contain a type keyword — e.g. field_texture_1 is WRONG because it contains 'text' as a substring but the second segment is 'texture' not 'text', causing a type mismatch. Always use field_image_<suffix> for image_field, field_video_<suffix> for video_field, etc.",
+      rules:
+        "Exactly one per workflow. Cannot be deleted. Leave media field values null — the user uploads media later via upload_file, then update_node. connect_nodes from a field sets linkedTarget (canvas Add to request parity) and syncs the field value to the target input.",
     },
     {
       type: "response",
       name: "Response / Output",
       category: "scaffold",
       description:
-        "Exit node. Collects final results into named slots. The default slot target handle is the raw slot id `result` (NO `in:` prefix). The run's primary result is read from here.",
-      rules: "Exactly one per workflow. Cannot be deleted. Multiple edges into the same slot are last-write-wins (no aggregation).",
+        "Exit node. Collects final results into named slots in `data.results` (each `{ id, label, value }`). Connect with connect_nodes using targetHandle \"result\" — the server auto-creates a `res_*` slot (same as dropping on the canvas). Edges must target a slot id; the canvas renders one handle per slot.",
+      rules:
+        "Exactly one per workflow. Cannot be deleted. Multiple edges into the same slot are last-write-wins (no aggregation). disconnect_nodes removes auto-created res_* slots; pre-seeded \"result\" slots (advertisement template) are kept.",
     },
   ];
 }
@@ -239,8 +286,30 @@ export function listNodeTypes(category?: string) {
       executableInput: "in:<inputKey>",
       executableOutput: "out:<outputKey>",
       requestInputsSource: "<fieldId> (raw, e.g. field_image_1)",
-      responseTarget: "result (raw, no in: prefix)",
+      responseTarget:
+        "result (drop zone on empty canvas — connect_nodes auto-creates a res_* slot) or an existing slot id (e.g. res_123_abc, or result on advertisement template)",
       fanIn: "Only in:image_urls / in:video_urls / in:audio_urls aggregate multiple edges into an array; everything else is last-write-wins.",
+      requestFieldPromotion:
+        "connect_nodes from Request-Inputs → executable node sets field.linkedTarget and syncs the value (same as canvas Add to request). disconnect_nodes clears linkedTarget when that edge is removed.",
+    },
+    wiringGuide: {
+      alwaysCallGetModelSchema:
+        "Before add_node/update_node/connect_nodes on selects, call get_model_schema(type) and copy exact option value strings.",
+      requestFieldIdNaming:
+        "CRITICAL — field IDs are type-detected by splitting on '_'. The segment right after 'field_' MUST be the exact type keyword. Use: field_image_<suffix> for image_field, field_video_<suffix> for video_field, field_audio_<suffix> for audio_field, field_text_<suffix> for text_field, field_select_<suffix> for select_field, etc. NEVER use a descriptive noun as the second segment (e.g. field_texture_1, field_photo_1, field_subject_1 are all WRONG for image fields — use field_image_texture_1, field_image_photo_1, field_image_subject_1 instead). Wrong IDs cause type-mismatch errors when connecting to image/video/audio inputs.",
+      optionalContextFields:
+        "Unwired request fields (e.g. Photography Style) are fine — they appear at start_run for user context and do not affect execution unless wired.",
+      aspectRatioVsSize: {
+        klingV3: { inputKey: "aspect_ratio", inputHandle: "in:aspect_ratio", values: ["16:9", "9:16", "1:1"] },
+        gptImage2: {
+          inputKey: "size",
+          inputHandle: "in:size",
+          note: "See get_model_schema(gptImage2).selectInputsExactValues for the full list.",
+        },
+        suggestedMapping: ASPECT_TO_GPT_SIZE_MAPPING,
+        recommendation:
+          "Use field_aspect_ratio → kling in:aspect_ratio AND a separate field (e.g. field_image_size) with gpt size selectOptions → gpt in:size. Do not reuse 16:9 strings for in:size.",
+      },
     },
   };
 }

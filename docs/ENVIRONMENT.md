@@ -4,7 +4,7 @@ Secrets are split across three surfaces: **Vercel backend**, **Vercel frontend**
 
 ---
 
-## Backend (Vercel: `thinkly-backend`)
+## Backend (Vercel: `thinklyneo-backend` → https://thinklyneo-backend.vercel.app)
 
 | Variable | Required | Purpose |
 |----------|----------|---------|
@@ -23,14 +23,25 @@ Secrets are split across three surfaces: **Vercel backend**, **Vercel frontend**
 | `NEXT_PUBLIC_LINKEDIN_URL` | Optional | Footer link |
 | `TRIGGER_API_URL` | Optional | Defaults to `https://api.trigger.dev` |
 | `THINKLY_API_ORIGIN` | Optional | Override origin for hosted MCP route proxy |
+| `CHAT_SESSION_KEY_SECRET` | Yes (chat) | Encrypts per-user MCP session keys for Brain |
+| `BACKEND_URL` | Yes (chat) | `https://thinklyneo-backend.vercel.app` — origin for MCP client from Brain route (`http://localhost:3000` locally) |
+| `UPSTASH_REDIS_REST_URL` | Yes (prod chat) | Upstash Redis REST URL for chat rate limits |
+| `UPSTASH_REDIS_REST_TOKEN` | Yes (prod chat) | Upstash Redis REST token (fail-closed in production when missing) |
+| `CHAT_RATE_LIMIT_PER_MIN` | Optional | Per-user chat POST limit (default `20` / minute) |
+| `CHAT_MAX_BODY_BYTES` | Optional | Max chat request body size (default `512000`) |
+| `MEM0_API_KEY` | Optional | Mem0 cross-session memory; skipped when unset |
+| `CHAT_MODEL_HELPER` | Optional | OpenRouter model for Helper (default `meta-llama/llama-3.2-3b-instruct:free`) |
+| `CHAT_MODEL_THINKLY` | Optional | Thinkly planner (default `openrouter/free`) |
+| `CHAT_MODEL_BRAIN` | Optional | Brain + MCP (default `openrouter/free`) |
+| `CHAT_MAX_OUTPUT_TOKENS` | Optional | Max output tokens per chat turn (default `4096`; avoids 65535 credit reservation) |
 
 ---
 
-## Frontend (Vercel: `thinkly-frontend`)
+## Frontend (Vercel: `thinklyneo` → https://thinklyneo.vercel.app)
 
 | Variable | Required | Purpose |
 |----------|----------|---------|
-| `BACKEND_URL` | Yes | Backend URL for `/api/*` rewrite proxy |
+| `BACKEND_URL` | Yes | `https://thinklyneo-backend.vercel.app` — backend URL for `/api/*` rewrite proxy |
 | `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` | Yes | Must match backend |
 | `CLERK_SECRET_KEY` | Yes | Clerk middleware on protected pages |
 | `NEXT_PUBLIC_CLERK_SIGN_IN_URL` | Yes | `/sign-in` |

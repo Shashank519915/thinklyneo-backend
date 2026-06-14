@@ -266,6 +266,207 @@ function resolveEdgeColor(sourceNode: GraphNode, sourceHandle: string): string {
   return "#7C3AED";
 }
 
+/** Label for a new Response slot — mirrors frontend Canvas.resolveResultLabel. */
+function resolveResultLabel(
+  sourceNode: GraphNode | undefined,
+  sourceHandle: string | null | undefined
+): string {
+  if (!sourceNode) return "Result";
+  if (sourceNode.type === "requestInputs") return "Request Input";
+  const def = defFor(sourceNode.type);
+  if (def) {
+    const key = sourceHandle?.replace(/^out:/, "");
+    const outLabel = key ? def.outputs?.find((o) => o.key === key)?.label : undefined;
+    return outLabel || def.name || "Result";
+  }
+  return "Result";
+}
+
+interface ResponseResultSlot {
+  id: string;
+  label: string;
+  value: unknown;
+}
+
+/**
+ * When connecting to the Response node's drop zone (`targetHandle === "result"`) on an empty
+ * canvas, mirror the frontend: append a `res_*` slot to `data.results` and wire the edge to
+ * that slot id. Pre-seeded templates (e.g. advertisement with id `"result"`) keep using `"result"`.
+ */
+function ensureResponseResultSlot(
+  targetNode: GraphNode,
+  sourceNode: GraphNode | undefined,
+  sourceHandle: string,
+  targetHandle: string
+): string {
+  if (targetNode.type !== "response" || targetHandle !== "result") return targetHandle;
+
+  targetNode.data = targetNode.data ?? {};
+  const existingResults = (targetNode.data.results as ResponseResultSlot[] | undefined) ?? [];
+  if (existingResults.some((r) => r.id === "result")) return "result";
+
+  const newResultId = `res_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+  targetNode.data.results = [
+    ...existingResults,
+    { id: newResultId, label: resolveResultLabel(sourceNode, sourceHandle), value: null },
+  ];
+  return newResultId;
+}
+
+type RequestFieldRecord = {
+  id: string;
+  type?: string;
+  value?: unknown;
+  linkedTarget?: { nodeId: string; handle: string };
+  mediaMaxCount?: number;
+};
+
+const ARRAY_MEDIA_INPUT_KEYS = new Set([
+  "images",
+  "uploadedImages",
+  "image_urls",
+  "video_urls",
+  "audio_urls",
+]);
+
+function parseMediaList(raw: unknown): string[] {
+  if (Array.isArray(raw)) {
+    return raw.filter((x): x is string => typeof x === "string" && x.length > 0);
+  }
+  if (typeof raw === "string" && raw.length > 0) {
+    return raw.split(",").map((s) => s.trim()).filter(Boolean);
+  }
+  return [];
+}
+
+function coerceRequestFieldValueForInput(field: RequestFieldRecord, paramKey: string): unknown {
+  const v = field.value;
+  if (field.type === "boolean_field") return v === "true";
+  if (field.type === "number_field") {
+    if (v === null || v === undefined || v === "") return undefined;
+    const n = Number(v);
+    return Number.isFinite(n) ? n : undefined;
+  }
+  if (v === null || v === undefined) return undefined;
+
+  if (
+    field.type === "image_field" ||
+    field.type === "video_field" ||
+    field.type === "audio_field"
+  ) {
+    const urls = parseMediaList(v);
+    if (ARRAY_MEDIA_INPUT_KEYS.has(paramKey)) return urls;
+    if (field.mediaMaxCount === 1) return urls[0] ?? null;
+    return urls.length <= 1 ? (urls[0] ?? null) : urls.join(",");
+  }
+
+  if (field.type === "file_field") {
+    const urls = parseMediaList(v);
+    return urls[0] ?? (typeof v === "string" ? v : null);
+  }
+
+  return v;
+}
+
+/** Mirrors canvas “Add to request”: mark the field as promoted to a target handle. */
+function linkRequestFieldToTarget(
+  nodes: GraphNode[],
+  requestNodeId: string,
+  fieldId: string,
+  targetNodeId: string,
+  targetHandle: string
+) {
+  const req = findNode(nodes, requestNodeId);
+  if (!req || req.type !== "requestInputs") return;
+
+  req.data = req.data ?? {};
+  const fields = (req.data.fields as RequestFieldRecord[] | undefined) ?? [];
+  const idx = fields.findIndex((f) => f.id === fieldId);
+  if (idx < 0) return;
+
+  const nextLink = { nodeId: targetNodeId, handle: targetHandle };
+  const existing = fields[idx].linkedTarget;
+  if (
+    existing &&
+    (existing.nodeId !== targetNodeId || existing.handle !== targetHandle)
+  ) {
+    // Same field wired to a second handle (e.g. duration + duration_text): keep the first link
+    // so canvas promotion stays stable; run-time still resolves all edges.
+    if (existing.nodeId !== targetNodeId) {
+      fields[idx] = { ...fields[idx], linkedTarget: nextLink };
+    }
+  } else {
+    fields[idx] = { ...fields[idx], linkedTarget: nextLink };
+  }
+  req.data.fields = fields;
+}
+
+/** Copy the request field's current value onto the target node's `inputs` bag. */
+function syncTargetInputFromRequestField(
+  nodes: GraphNode[],
+  requestNodeId: string,
+  fieldId: string,
+  targetNodeId: string,
+  targetHandle: string
+) {
+  const req = findNode(nodes, requestNodeId);
+  const target = findNode(nodes, targetNodeId);
+  if (!req || req.type !== "requestInputs" || !target || target.type === "response") return;
+
+  const fields = (req.data?.fields as RequestFieldRecord[] | undefined) ?? [];
+  const field = fields.find((f) => f.id === fieldId);
+  if (!field) return;
+
+  const paramKey = targetHandle.startsWith("in:") ? targetHandle.slice(3) : targetHandle;
+  const coerced = coerceRequestFieldValueForInput(field, paramKey);
+  if (coerced === undefined) return;
+
+  target.data = target.data ?? {};
+  const inputs = (target.data.inputs as Record<string, unknown> | undefined) ?? {};
+  target.data.inputs = { ...inputs, [paramKey]: coerced };
+}
+
+function clearRequestFieldLinkForEdge(
+  nodes: GraphNode[],
+  edge: GraphEdge
+) {
+  const source = findNode(nodes, edge.source);
+  if (!source || source.type !== "requestInputs" || !edge.sourceHandle) return;
+
+  source.data = source.data ?? {};
+  const fields = (source.data.fields as RequestFieldRecord[] | undefined) ?? [];
+  let changed = false;
+  const nextFields = fields.map((f) => {
+    if (f.id !== edge.sourceHandle) return f;
+    const link = f.linkedTarget;
+    if (
+      !link ||
+      link.nodeId !== edge.target ||
+      link.handle !== edge.targetHandle
+    ) {
+      return f;
+    }
+    changed = true;
+    const { linkedTarget: _removed, ...rest } = f;
+    return rest;
+  });
+  if (changed) source.data.fields = nextFields;
+}
+
+/** Remove Response result slots orphaned by disconnecting edges (mirrors workflow-store onEdgesChange). */
+function pruneResponseResultSlots(nodes: GraphNode[], removedEdges: GraphEdge[]) {
+  for (const edge of removedEdges) {
+    const targetNode = findNode(nodes, edge.target);
+    if (targetNode?.type !== "response") continue;
+    const resultId = edge.targetHandle;
+    if (!resultId || resultId === "result") continue;
+
+    targetNode.data = targetNode.data ?? {};
+    const existingResults = (targetNode.data.results as ResponseResultSlot[] | undefined) ?? [];
+    targetNode.data.results = existingResults.filter((r) => r.id !== resultId);
+  }
+}
+
 function applyConnectNodes(
   nodes: GraphNode[],
   edges: GraphEdge[],
@@ -280,18 +481,27 @@ function applyConnectNodes(
   assertValidSourceHandle(sourceNode, op.sourceHandle);
   assertValidTargetHandle(targetNode, op.targetHandle);
 
-  if (!isValidConnection(op.sourceHandle, op.targetHandle, sourceNode.type, targetNode.type)) {
+  const effectiveTargetHandle = ensureResponseResultSlot(
+    targetNode,
+    sourceNode,
+    op.sourceHandle,
+    op.targetHandle
+  );
+
+  if (!isValidConnection(op.sourceHandle, effectiveTargetHandle, sourceNode.type, targetNode.type)) {
     throw new GraphOpError(
-      `Incompatible handle types: "${op.sourceHandle}" (${sourceNode.type}) → "${op.targetHandle}" (${targetNode.type}).`
+      `Incompatible handle types: "${op.sourceHandle}" (${sourceNode.type}) → "${effectiveTargetHandle}" (${targetNode.type}).`
     );
   }
 
   // Single-input rule: a non-fan-in target handle accepts only one incoming edge.
-  if (!FAN_IN_TARGET_HANDLES.has(op.targetHandle)) {
-    const occupied = edges.find((e) => e.target === op.target && e.targetHandle === op.targetHandle);
+  if (!FAN_IN_TARGET_HANDLES.has(effectiveTargetHandle)) {
+    const occupied = edges.find(
+      (e) => e.target === op.target && e.targetHandle === effectiveTargetHandle
+    );
     if (occupied) {
       throw new GraphOpError(
-        `Target handle "${op.targetHandle}" on "${op.target}" already has an incoming edge (${occupied.id}). Disconnect it first, or use a fan-in handle (in:image_urls/in:video_urls/in:audio_urls).`
+        `Target handle "${effectiveTargetHandle}" on "${op.target}" already has an incoming edge (${occupied.id}). Disconnect it first, or use a fan-in handle (in:image_urls/in:video_urls/in:audio_urls).`
       );
     }
   }
@@ -312,7 +522,7 @@ function applyConnectNodes(
     source: op.source,
     target: op.target,
     sourceHandle: op.sourceHandle,
-    targetHandle: op.targetHandle,
+    targetHandle: effectiveTargetHandle,
     type: "animatedEdge",
     data: { color: edgeColor },
     markerEnd: {
@@ -322,10 +532,37 @@ function applyConnectNodes(
       height: 16,
     },
   });
-  return { op: "connectNodes", edgeId: id, message: `Connected ${op.source}:${op.sourceHandle} → ${op.target}:${op.targetHandle}.` };
+
+  if (sourceNode.type === "requestInputs") {
+    linkRequestFieldToTarget(
+      nodes,
+      op.source,
+      op.sourceHandle,
+      op.target,
+      effectiveTargetHandle
+    );
+    syncTargetInputFromRequestField(
+      nodes,
+      op.source,
+      op.sourceHandle,
+      op.target,
+      effectiveTargetHandle
+    );
+  }
+
+  return {
+    op: "connectNodes",
+    edgeId: id,
+    message: `Connected ${op.source}:${op.sourceHandle} → ${op.target}:${effectiveTargetHandle}.`,
+  };
 }
 
-function applyDisconnectNodes(edges: GraphEdge[], op: Extract<GraphOp, { op: "disconnectNodes" }>): {
+function applyDisconnectNodes(
+  nodes: GraphNode[],
+  edges: GraphEdge[],
+  op: Extract<GraphOp, { op: "disconnectNodes" }>
+): {
+  nodes: GraphNode[];
   edges: GraphEdge[];
   result: GraphOpResult;
 } {
@@ -346,7 +583,10 @@ function applyDisconnectNodes(edges: GraphEdge[], op: Extract<GraphOp, { op: "di
   if (removed.length === 0) throw new GraphOpError("No matching edge found to disconnect.");
   const removedIds = new Set(removed.map((e) => e.id));
   const next = edges.filter((e) => !removedIds.has(e.id));
+  for (const edge of removed) clearRequestFieldLinkForEdge(nodes, edge);
+  pruneResponseResultSlots(nodes, removed);
   return {
+    nodes,
     edges: next,
     result: { op: "disconnectNodes", removedEdgeIds: [...removedIds], message: `Removed ${removedIds.size} edge(s).` },
   };
@@ -362,10 +602,21 @@ function applyDeleteNode(
   if (SCAFFOLD_TYPES.has(node.type)) {
     throw new GraphOpError(`Cannot delete scaffold node "${op.nodeId}" (${node.type}). Every workflow must keep requestInputs and response.`);
   }
-  const nextNodes = nodes.filter((n) => n.id !== op.nodeId);
   const removed = edges.filter((e) => e.source === op.nodeId || e.target === op.nodeId);
   const removedIds = new Set(removed.map((e) => e.id));
   const nextEdges = edges.filter((e) => !removedIds.has(e.id));
+
+  const nextNodes = nodes
+    .filter((n) => n.id !== op.nodeId)
+    .map((n) => {
+      if (n.type !== "requestInputs") return n;
+      const data = n.data ?? {};
+      const fields = (data.fields as RequestFieldRecord[] | undefined) ?? [];
+      const filtered = fields.filter((f) => f.linkedTarget?.nodeId !== op.nodeId);
+      if (filtered.length === fields.length) return n;
+      return { ...n, data: { ...data, fields: filtered } };
+    });
+
   return {
     nodes: nextNodes,
     edges: nextEdges,
@@ -403,7 +654,8 @@ export function applyGraphOps(
         results.push(applyConnectNodes(nodes, edges, op));
         break;
       case "disconnectNodes": {
-        const r = applyDisconnectNodes(edges, op);
+        const r = applyDisconnectNodes(nodes, edges, op);
+        nodes = r.nodes;
         edges = r.edges;
         results.push(r.result);
         break;

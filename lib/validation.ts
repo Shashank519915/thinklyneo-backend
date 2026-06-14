@@ -23,6 +23,20 @@ export const requestFieldSchema = z.object({
     .optional(),
   label: z.string().max(120).optional(),
   value: z.any().optional(),
+  /** Required for select_field — dropdown options shown in the canvas UI. Copy from get_model_schema `options`. */
+  selectOptions: z
+    .array(
+      z.object({
+        label: z.string().max(120),
+        value: z.string().max(120),
+      })
+    )
+    .max(50)
+    .optional(),
+  numberMin: z.number().optional(),
+  numberMax: z.number().optional(),
+  numberStep: z.number().optional(),
+  mediaMaxCount: z.number().int().min(1).max(20).optional(),
 });
 
 /** `POST /api/workflows` validation — initial label + optional description + seed fields. */

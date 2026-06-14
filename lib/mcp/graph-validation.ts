@@ -66,15 +66,19 @@ export function getHandleDataType(
   if (handleId === "result") return "response";
 
   if (handleId.startsWith("field_")) {
-    if (handleId.includes("image")) return "image";
-    if (handleId.includes("video")) return "video";
-    if (handleId.includes("audio")) return "audio";
-    if (handleId.includes("media")) return "media";
-    if (handleId.includes("file")) return "file";
-    if (handleId.includes("number")) return "number";
-    if (handleId.includes("boolean")) return "boolean";
-    if (handleId.includes("select")) return "text";
-    if (handleId.includes("text")) return "text";
+    // Match the field TYPE segment precisely: field_<type>_* or field_<type> exactly.
+    // We split on underscores and check if any segment equals the type keyword exactly,
+    // so that e.g. "field_texture_1" (contains "text") is NOT misclassified as "text".
+    const segments = handleId.split("_");
+    if (segments.includes("image")) return "image";
+    if (segments.includes("video")) return "video";
+    if (segments.includes("audio")) return "audio";
+    if (segments.includes("media")) return "media";
+    if (segments.includes("file")) return "file";
+    if (segments.includes("number")) return "number";
+    if (segments.includes("boolean")) return "boolean";
+    if (segments.includes("select")) return "text";
+    if (segments.includes("text")) return "text";
     return "generic";
   }
 

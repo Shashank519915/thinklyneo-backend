@@ -3,7 +3,7 @@
  * Keep in sync across hosted HTTP (`app/api/mcp/route.ts`) and StdIO scripts.
  */
 
-export const MCP_SERVER_INSTRUCTIONS = `Thinkly MCP server — build and run AI media workflows on the Thinkly canvas platform (https://thinkly-frontend.vercel.app).
+export const MCP_SERVER_INSTRUCTIONS = `Thinkly MCP server — build and run AI media workflows on the Thinkly canvas platform (https://thinklyneo.vercel.app).
 
 When the user mentions Thinkly, workflows, runs, nodes, or credits, ALWAYS use these MCP tools. Do NOT create local files, READMEs, or search the web as a substitute.
 
@@ -19,7 +19,13 @@ When the user mentions Thinkly, workflows, runs, nodes, or credits, ALWAYS use t
   • executable input port  = "in:<inputKey>"   (e.g. in:prompt, in:image_urls)
   • executable output port = "out:<outputKey>" (e.g. out:response, out:result, out:outputImage)
   • Request-Inputs source  = the raw field id  (e.g. field_image_1 — NO prefix)
-  • Response target slot    = the raw slot id   (e.g. result — NO prefix)
+  • Response target        = "result" (drop zone — auto-creates a res_* slot) or an existing slot id (NO in: prefix)
+- connect_nodes to Response with targetHandle "result" auto-creates a visible result slot (mirrors canvas drop zone). disconnect_nodes removes auto-created res_* slots.
+- get_model_schema returns exact defaults, min/max/step, and options as { label, value } for every dropdown/slider. Use those values in update_node or in requestFields.selectOptions — do not guess enum strings. It also returns selectInputsExactValues and wiringNotes per node type.
+- connect_nodes from Request-Inputs → a node input sets field.linkedTarget (canvas “Add to request” parity) and syncs the field value onto the target. disconnect_nodes clears linkedTarget when that edge is removed.
+- Request-Inputs select values must match the TARGET input key exactly: klingV3 uses in:aspect_ratio (16:9|9:16|1:1); gptImage2 uses in:size (3840x2160|2160x3840|…). See list_node_types.wiringGuide.aspectRatioVsSize — use separate fields or map pixel sizes for GPT.
+- Unwired request fields are OK (optional run-time context only — they do not affect execution).
+- Prefer update_node defaults for node params the user does not need at run time. Wire fields you create to in:<key> handles when they should drive a node. select_field requires selectOptions or the canvas shows no dropdown.
 - Output shapes differ per node — wire to the right key. Examples: LLMs output {response}; gptImage2/klingV3 output {result}; cropImage outputs a BARE STRING url; mergeVideo outputs {outputVideo}. Always confirm via get_model_schema.
 - Fan-in: ONLY in:image_urls / in:video_urls / in:audio_urls aggregate multiple incoming edges into an array. Every other handle is last-write-wins, so do not wire two sources into one in:prompt expecting concatenation.
 
@@ -28,7 +34,8 @@ Never invent or auto-upload media. When a node or request field needs an image/v
 
 ═══ EXECUTION & CREDITS ═══
 - Check get_balance before expensive runs. start_run places a credit hold; results stream per-node.
-- After start_run, poll get_run_status(runId) until status is success / failed / partial. The Response output is surfaced first.
+- start_run returns runId (poll with get_run_status) AND orchestratorRunId (for Trigger.dev realtime in Thinkly UI — pin_live_run in Brain chat).
+- Poll get_run_status(runId) until terminal. Default includes node outputs (set includeOutputs:false for slim). Thinkly UI also subscribes via orchestratorRunId + Trigger realtime.
 - Note: Kling v3 and GPT Image 2 return demo/stub media (no live model in this environment); other nodes run for real and fall back to a stub asset only if the provider fails.`;
 
 export const MCP_TOOLS = [
@@ -120,7 +127,7 @@ export const MCP_TOOLS = [
         requestFields: {
           type: "array",
           description:
-            'Optional Request-Inputs fields to seed (mostly for an empty canvas). Each: { type, label?, value? } where type is one of text_field/select_field/number_field/boolean_field/image_field/audio_field/video_field/media_field/file_field. Set text/select/number values; LEAVE media fields empty.',
+            'Optional Request-Inputs fields to seed (mostly for an empty canvas). Each: { type, label?, value?, id?, selectOptions?, numberMin?, numberMax?, numberStep?, mediaMaxCount? }. type is one of text_field/select_field/number_field/boolean_field/image_field/audio_field/video_field/media_field/file_field. select_field MUST include selectOptions: [{ label, value }] with EXACT value strings from get_model_schema for the target you will wire to (e.g. gptImage2 in:size → 3840x2160, NOT 16:9). Set text/select/number values; LEAVE media fields empty. Wire fields that should drive nodes via connect_nodes (sets linkedTarget); unwired fields are optional run-time context only.',
           items: { type: "object" },
         },
       },
@@ -243,7 +250,7 @@ export const MCP_TOOLS = [
   {
     name: "connect_nodes",
     description:
-      "Create a validated edge between two nodes. Handle IDs follow the convention: source output = out:<key> (or a Request-Inputs field id), target input = in:<key> (or the response slot \"result\"). Validates type compatibility, prevents cycles, and enforces single-input on non-fan-in handles. Only in:image_urls/in:video_urls/in:audio_urls accept multiple incoming edges.",
+      "Create a validated edge between two nodes. Handle IDs: source output = out:<key> (or a Request-Inputs field id), target input = in:<key>, Response = \"result\" (auto-creates a res_* result slot on empty canvases — same as canvas drop zone) or an existing slot id. Validates type compatibility, prevents cycles, and enforces single-input on non-fan-in handles. Only in:image_urls/in:video_urls/in:audio_urls accept multiple incoming edges. When source is Request-Inputs, sets field.linkedTarget and syncs the field value to the target input (Add to request parity).",
     inputSchema: {
       type: "object",
       properties: {
@@ -256,7 +263,8 @@ export const MCP_TOOLS = [
         target: { type: "string", description: "Target node id." },
         targetHandle: {
           type: "string",
-          description: "Target handle: in:<inputKey>, or the response slot \"result\".",
+          description:
+            'Target handle: in:<inputKey> for executable nodes, or "result" for Response (auto-creates res_* slot) / an existing Response slot id.',
         },
       },
       required: ["workflowId", "source", "sourceHandle", "target", "targetHandle"],
@@ -265,7 +273,7 @@ export const MCP_TOOLS = [
   {
     name: "disconnect_nodes",
     description:
-      "Remove an edge by edgeId, or by source/target (optionally narrowed by sourceHandle/targetHandle).",
+      "Remove an edge by edgeId, or by source/target (optionally narrowed by sourceHandle/targetHandle). Disconnecting from Response removes auto-created res_* slots.",
     inputSchema: {
       type: "object",
       properties: {
@@ -295,7 +303,7 @@ export const MCP_TOOLS = [
   {
     name: "start_run",
     description:
-      "Execute a Thinkly workflow. Provide workflowId OR workflowName (fuzzy-matched against the user's workflows, then system templates). REQUEST-FIELD DISCOVERY: if you call it WITHOUT inputValues and the workflow has Request-Inputs fields, it returns the field schema instead of running — call again with inputValues filled in. Deducts credits and runs in the background; returns a runId to poll with get_run_status.",
+      "Execute a Thinkly workflow. Provide workflowId OR workflowName (fuzzy-matched). Returns runId (for get_run_status) and orchestratorRunId (for realtime UI). REQUEST-FIELD DISCOVERY: if you call it WITHOUT inputValues and the workflow has Request-Inputs fields, it returns the field schema instead of running — call again with inputValues filled in. Deducts credits and runs in the background.",
     inputSchema: {
       type: "object",
       properties: {
@@ -325,11 +333,15 @@ export const MCP_TOOLS = [
   {
     name: "get_run_status",
     description:
-      "Poll the status and per-node results of a Thinkly workflow run. Call repeatedly until status is 'success' or 'failed'.",
+      "Poll the status and per-node results of a Thinkly workflow run. Call repeatedly until status is terminal. By default returns node outputs (parity with GET /api/v1/runs/:id). Set includeOutputs:false for slim hasOutput-only rows.",
     inputSchema: {
       type: "object",
       properties: {
         runId: { type: "string", description: "Run ID returned by start_run." },
+        includeOutputs: {
+          type: "boolean",
+          description: "When false, nodeRuns omit output payloads (hasOutput only). Default true.",
+        },
       },
       required: ["runId"],
     },

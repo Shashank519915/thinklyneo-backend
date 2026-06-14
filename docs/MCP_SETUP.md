@@ -10,8 +10,8 @@ local clone, no script, no database connection.
 ## Endpoint
 
 ```
-https://thinkly-frontend.vercel.app/api/mcp   (frontend rewrites /api/* → backend; bypasses Clerk)
-https://thinkly-backend.vercel.app/api/mcp    (direct backend)
+https://thinklyneo.vercel.app/api/mcp          (frontend rewrites /api/* → backend; bypasses Clerk)
+https://thinklyneo-backend.vercel.app/api/mcp  (direct backend)
 ```
 
 Each tool call proxies to the same public REST API (`/api/v1/...`) forwarding your
@@ -30,7 +30,7 @@ Dashboard → **API & Outbound Webhooks** → create a key (`gx_…`). Copy it o
 {
   "mcpServers": {
     "thinkly": {
-      "url": "https://thinkly-frontend.vercel.app/api/mcp",
+      "url": "https://thinklyneo.vercel.app/api/mcp",
       "headers": { "Authorization": "Bearer gx_your_key_here" }
     }
   }

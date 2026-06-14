@@ -5,7 +5,7 @@ import { describe, it, expect } from "vitest";
 import { POST } from "@/app/api/mcp/route";
 
 async function postMcp(body: unknown, headers: Record<string, string> = {}) {
-  const request = new Request("https://thinkly-backend.vercel.app/api/mcp", {
+  const request = new Request("https://thinklyneo-backend.vercel.app/api/mcp", {
     method: "POST",
     headers: { "Content-Type": "application/json", ...headers },
     body: JSON.stringify(body),

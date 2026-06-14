@@ -38,6 +38,46 @@ describe("applyGraphOps", () => {
       { op: "connectNodes", source: llmId, sourceHandle: "out:response", target: "response", targetHandle: "result" },
     ]);
     expect(wired.edges).toHaveLength(2);
+    const requestNode = wired.nodes.find((n) => n.id === "request-inputs");
+    const fields = (requestNode?.data?.fields as Array<{ id: string; linkedTarget?: { nodeId: string; handle: string } }>) ?? [];
+    const textField = fields.find((f) => f.id === "field_text_default");
+    expect(textField?.linkedTarget).toEqual({ nodeId: llmId, handle: "in:prompt" });
+    const llmNode = wired.nodes.find((n) => n.id === llmId);
+    expect((llmNode?.data?.inputs as { prompt?: string })?.prompt).toBe("");
+    const responseEdge = wired.edges.find((e) => e.target === "response");
+    expect(responseEdge?.targetHandle).toMatch(/^res_/);
+    const responseNode = wired.nodes.find((n) => n.id === "response");
+    const results = (responseNode?.data?.results as Array<{ id: string; label: string }>) ?? [];
+    expect(results).toHaveLength(1);
+    expect(results[0].id).toBe(responseEdge?.targetHandle);
+    expect(results[0].label).toBe("Response");
+  });
+
+  it("disconnect clears request field linkedTarget", () => {
+    const { nodes, edges } = emptyGraph();
+    let g = applyGraphOps(nodes, edges, [{ op: "addNode", nodeType: "openRouter" }]);
+    const llmId = g.results[0].nodeId!;
+    g = applyGraphOps(g.nodes, g.edges, [
+      { op: "connectNodes", source: "request-inputs", sourceHandle: "field_text_default", target: llmId, targetHandle: "in:prompt" },
+    ]);
+    const edgeId = g.edges[0].id;
+    g = applyGraphOps(g.nodes, g.edges, [{ op: "disconnectNodes", edgeId }]);
+    const requestNode = g.nodes.find((n) => n.id === "request-inputs");
+    const fields = (requestNode?.data?.fields as Array<{ id: string; linkedTarget?: unknown }>) ?? [];
+    expect(fields.find((f) => f.id === "field_text_default")?.linkedTarget).toBeUndefined();
+  });
+
+  it("disconnecting from response removes auto-created result slots", () => {
+    const { nodes, edges } = emptyGraph();
+    let g = applyGraphOps(nodes, edges, [{ op: "addNode", nodeType: "openRouter" }]);
+    const llmId = g.results[0].nodeId!;
+    g = applyGraphOps(g.nodes, g.edges, [
+      { op: "connectNodes", source: llmId, sourceHandle: "out:response", target: "response", targetHandle: "result" },
+    ]);
+    const edgeId = g.edges.find((e) => e.target === "response")!.id;
+    g = applyGraphOps(g.nodes, g.edges, [{ op: "disconnectNodes", edgeId }]);
+    const responseNode = g.nodes.find((n) => n.id === "response");
+    expect((responseNode?.data?.results as unknown[]) ?? []).toHaveLength(0);
   });
 
   it("rejects an invalid target input key", () => {

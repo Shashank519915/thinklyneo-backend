@@ -87,6 +87,11 @@ export async function POST(request: Request) {
             type,
             label: f.label ?? type,
             value: f.value ?? (type === "text_field" || type === "select_field" ? "" : null),
+            ...(f.selectOptions?.length ? { selectOptions: f.selectOptions } : {}),
+            ...(f.numberMin !== undefined ? { numberMin: f.numberMin } : {}),
+            ...(f.numberMax !== undefined ? { numberMax: f.numberMax } : {}),
+            ...(f.numberStep !== undefined ? { numberStep: f.numberStep } : {}),
+            ...(f.mediaMaxCount !== undefined ? { mediaMaxCount: f.mediaMaxCount } : {}),
           };
         });
       }

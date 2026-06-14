@@ -15,7 +15,57 @@ model User {
   balance   CreditBalance?
   ledgers   CreditLedger[]
   keys      ApiKey[]
+  chats     Chat[]
+  chatSessionKey ChatSessionKey?
   createdAt DateTime       @default(now())
+}
+
+enum ChatKind {
+  helper
+  thinkly
+  brain
+}
+
+model Chat {
+  id                 String    @id @default(cuid())
+  userId             String
+  user               User      @relation(fields: [userId], references: [id])
+  kind               ChatKind
+  title              String?
+  workflowId         String?   @unique
+  workflow           Workflow? @relation(fields: [workflowId], references: [id])
+  activatedFromChatId String?
+  blueprint          Json?
+  blueprintSource    Json?
+  modelId            String?
+  messages           Message[]
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+
+  @@index([userId, kind])
+  @@index([userId, activatedFromChatId])
+}
+
+model Message {
+  id                String   @id @default(cuid())
+  chatId            String
+  chat              Chat     @relation(fields: [chatId], references: [id], onDelete: Cascade)
+  role              String
+  parts             Json
+  orchestratorRunId String?
+  workflowRunId     String?
+  createdAt         DateTime @default(now())
+
+  @@index([chatId, createdAt])
+}
+
+model ChatSessionKey {
+  userId        String   @id
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  apiKeyId      String
+  encryptedKey  String
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
 }
 
 model Workflow {
@@ -32,6 +82,7 @@ model Workflow {
   runs          WorkflowRun[]
   webhookUrl    String?
   webhookSecret String?
+  brainChat     Chat?
 }
 
 model WorkflowRun {
