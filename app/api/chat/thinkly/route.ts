@@ -5,6 +5,7 @@ import {
   tool,
   stepCountIs,
   type UIMessage,
+  generateId, 
 } from "ai";
 import { prisma } from "@/lib/prisma";
 import { thinklySystemPrompt } from "@/lib/chat/prompts";
@@ -98,13 +99,20 @@ export async function POST(request: Request) {
 
   return result.toUIMessageStreamResponse({
     originalMessages: messages,
+    generateMessageId: generateId,
     consumeSseStream: chatStreamConsumeSseStream,
-    onFinish: async ({ messages: finalMessages }) => {
+    onFinish: async ({ messages: finalMessages, responseMessage }) => {
       try {
-        await persistUiMessages(chatId, userId, finalMessages);
-        persistChatMemoryTurn(userId, "thinkly", chatId, finalMessages);
+        const toPersist =
+          responseMessage?.id &&
+          !finalMessages.some((m) => m.id === responseMessage.id)
+            ? [...finalMessages, responseMessage]
+            : finalMessages;
 
-        const rawBlueprint = extractBlueprintFromMessages(finalMessages);
+        await persistUiMessages(chatId, userId, toPersist);
+        persistChatMemoryTurn(userId, "thinkly", chatId, toPersist);
+
+        const rawBlueprint = extractBlueprintFromMessages(toPersist);
         let blueprintUpdate: object | undefined;
         if (rawBlueprint) {
           const bp = validateBlueprintForPersist(rawBlueprint, { allowInvalid: true });

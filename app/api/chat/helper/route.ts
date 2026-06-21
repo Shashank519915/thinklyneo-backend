@@ -3,6 +3,7 @@ import {
   convertToModelMessages,
   streamText,
   type UIMessage,
+  generateId,
 } from "ai";
 import { prisma } from "@/lib/prisma";
 import { helperSystemPrompt } from "@/lib/chat/prompts";
@@ -11,10 +12,17 @@ import {
   resolveMaxOutputTokens,
   resolveModelForMode,
 } from "@/lib/chat/models";
-import { ensureHelperChat, persistUiMessages, verifyChatOwnership } from "@/lib/chat/persist";
+import {
+  ensureHelperChat,
+  persistUiMessages,
+  verifyChatOwnership,
+} from "@/lib/chat/persist";
 import { guardChatRequest } from "@/lib/chat/guard";
 import { retrieveChatMemory, persistChatMemoryTurn } from "@/lib/chat/memory";
-import { parseChatJsonBody, validateMessagesArray } from "@/lib/chat/request-body";
+import {
+  parseChatJsonBody,
+  validateMessagesArray,
+} from "@/lib/chat/request-body";
 import {
   getInboundUserMessages,
   sanitizeUiMessagesForConversion,
@@ -43,7 +51,10 @@ export async function POST(request: Request) {
   if (typeof body.chatId === "string" && body.chatId) {
     const owned = await verifyChatOwnership(body.chatId, userId, "helper");
     if (!owned) {
-      return NextResponse.json({ error: "Helper chat not found" }, { status: 404 });
+      return NextResponse.json(
+        { error: "Helper chat not found" },
+        { status: 404 },
+      );
     }
     chatId = body.chatId;
   } else {
@@ -67,11 +78,17 @@ export async function POST(request: Request) {
 
   return result.toUIMessageStreamResponse({
     originalMessages: messages,
+    generateMessageId: generateId,
     consumeSseStream: chatStreamConsumeSseStream,
-    onFinish: async ({ messages: finalMessages }) => {
+    onFinish: async ({ messages: finalMessages, responseMessage }) => {
       try {
-        await persistUiMessages(chatId, userId, finalMessages);
-        persistChatMemoryTurn(userId, "helper", chatId, finalMessages);
+        const toPersist =
+          responseMessage?.id &&
+          !finalMessages.some((m) => m.id === responseMessage.id)
+            ? [...finalMessages, responseMessage]
+            : finalMessages;
+        await persistUiMessages(chatId, userId, toPersist);
+        persistChatMemoryTurn(userId, "helper", chatId, toPersist);
         await prisma.chat.update({
           where: { id: chatId },
           data: { updatedAt: new Date() },

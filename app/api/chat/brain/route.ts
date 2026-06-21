@@ -4,6 +4,7 @@ import {
   convertToModelMessages,
   streamText,
   stepCountIs,
+  generateId,
   type UIMessage,
 } from "ai";
 import { prisma } from "@/lib/prisma";
@@ -143,9 +144,16 @@ export async function POST(request: Request) {
 
     return result.toUIMessageStreamResponse({
       originalMessages: messages,
+      generateMessageId: generateId,
       consumeSseStream: chatStreamConsumeSseStream,
-      onFinish: async ({ messages: finalMessages }) => {
-        const meta = extractRunMetadata(finalMessages);
+      onFinish: async ({ messages: finalMessages, responseMessage }) => {
+        const toPersist =
+          responseMessage?.id &&
+          !finalMessages.some((m) => m.id === responseMessage.id)
+            ? [...finalMessages, responseMessage]
+            : finalMessages;
+
+        const meta = extractRunMetadata(toPersist);
 
         if (meta.workflowIdUpdate) {
           const owned = await prisma.workflow.findFirst({
@@ -162,12 +170,12 @@ export async function POST(request: Request) {
         }
 
         try {
-          await persistUiMessages(chatId, userId, finalMessages, {
+          await persistUiMessages(chatId, userId, toPersist, {
             orchestratorRunId: meta.orchestratorRunId,
             workflowRunId: meta.workflowRunId,
             orchestratorMessageId: meta.orchestratorMessageId,
           });
-          persistChatMemoryTurn(userId, "brain", chatId, finalMessages);
+          persistChatMemoryTurn(userId, "brain", chatId, toPersist);
 
           await prisma.chat.update({
             where: { id: chatId },
