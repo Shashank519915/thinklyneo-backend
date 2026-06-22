@@ -180,11 +180,13 @@ export function buildNodeTypeSummary(def: NodeDefinition) {
       type: i.handle?.type ?? "text",
       label: i.label,
       required: i.required ?? false,
+      description: i.tooltip ?? i.label,
     })),
     outputPorts: def.outputs.map((o) => ({
       handle: `out:${o.key}`,
       type: o.type,
       label: o.label,
+      description: o.label,
     })),
     outputShape: OUTPUT_SHAPE_BY_TYPE[def.type] ?? "(see get_model_schema)",
     behavior: describeStubBehavior(def),

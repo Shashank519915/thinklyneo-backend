@@ -56,6 +56,8 @@ export async function retrieveChatMemory(
   mode: string,
   messages: UIMessage[],
 ): Promise<string> {
+  if (mode === "helper") return "";
+
   const client = getMemoryClient();
   if (!client) return "";
 
@@ -84,6 +86,8 @@ export function persistChatMemoryTurn(
   chatId: string,
   messages: UIMessage[],
 ): void {
+  if (mode === "helper") return;
+
   const client = getMemoryClient();
   if (!client) return;
 
