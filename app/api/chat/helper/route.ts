@@ -25,7 +25,9 @@ import {
 } from "@/lib/chat/request-body";
 import {
   getInboundUserMessages,
+  sanitizeHelperHistory,
   sanitizeUiMessagesForConversion,
+  truncateMessageHistory,
 } from "@/lib/chat/sanitize-messages";
 import { chatStreamConsumeSseStream } from "@/lib/chat/stream-response";
 import { logChat } from "@/lib/chat/chat-log";
@@ -64,13 +66,34 @@ export async function POST(request: Request) {
   const memorySnippet = await retrieveChatMemory(userId, "helper", messages);
   const openrouter = getOpenRouterProvider();
   const modelMessages = sanitizeUiMessagesForConversion(messages);
+  const truncatedMessages = truncateMessageHistory(modelMessages, 6);
+  const sanitizedHistory = sanitizeHelperHistory(truncatedMessages);
 
   await persistUiMessages(chatId, userId, getInboundUserMessages(messages));
+
+  if (sanitizedHistory.length > 0) {
+    const lastIdx = sanitizedHistory.length - 1;
+    const lastMsg = sanitizedHistory[lastIdx];
+    if (lastMsg.role === "user") {
+      sanitizedHistory[lastIdx] = {
+        ...lastMsg,
+        parts: lastMsg.parts.map((p) => {
+          if (p.type === "text") {
+            return {
+              ...p,
+              text: `[Focus Rule: Answer ONLY the query below. Do NOT repeat or list details of other nodes from previous conversation turns unless explicitly asked to compare.]\n\nQuery: ${(p as { text: string }).text}`,
+            };
+          }
+          return p;
+        }),
+      };
+    }
+  }
 
   const result = streamText({
     model: openrouter(resolveModelForMode("helper")),
     system: helperSystemPrompt() + memorySnippet,
-    messages: await convertToModelMessages(modelMessages),
+    messages: await convertToModelMessages(sanitizedHistory),
     maxOutputTokens: resolveMaxOutputTokens(),
     temperature: 0.2,
     abortSignal: request.signal,
