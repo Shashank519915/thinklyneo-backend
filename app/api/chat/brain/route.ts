@@ -24,6 +24,7 @@ import { logChat } from "@/lib/chat/chat-log";
 import {
   getInboundUserMessages,
   sanitizeUiMessagesForConversion,
+  truncateMessageHistory,
 } from "@/lib/chat/sanitize-messages";
 import { chatStreamConsumeSseStream } from "@/lib/chat/stream-response";
 
@@ -128,13 +129,14 @@ export async function POST(request: Request) {
     const memorySnippet = await retrieveChatMemory(userId, "brain", messages);
     const openrouter = getOpenRouterProvider();
     const modelMessages = sanitizeUiMessagesForConversion(messages);
+    const truncatedMessages = truncateMessageHistory(modelMessages, 10);
 
     await persistUiMessages(chatId, userId, getInboundUserMessages(messages));
 
     const result = streamText({
       model: openrouter(resolveModelForMode("brain")),
       system: brainSystemPrompt(chat.workflowId ?? undefined) + memorySnippet,
-      messages: await convertToModelMessages(modelMessages),
+      messages: await convertToModelMessages(truncatedMessages),
       maxOutputTokens: resolveMaxOutputTokens(),
       tools: { ...mcpTools, ...brainUiTools },
       stopWhen: stepCountIs(12),

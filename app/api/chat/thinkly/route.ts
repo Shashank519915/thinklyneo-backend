@@ -23,6 +23,7 @@ import { parseChatJsonBody, validateMessagesArray } from "@/lib/chat/request-bod
 import {
   getInboundUserMessages,
   sanitizeUiMessagesForConversion,
+  truncateMessageHistory,
 } from "@/lib/chat/sanitize-messages";
 import { chatStreamConsumeSseStream } from "@/lib/chat/stream-response";
 import { logChat } from "@/lib/chat/chat-log";
@@ -76,13 +77,14 @@ export async function POST(request: Request) {
   const memorySnippet = await retrieveChatMemory(userId, "thinkly", messages);
   const openrouter = getOpenRouterProvider();
   const modelMessages = sanitizeUiMessagesForConversion(messages);
+  const truncatedMessages = truncateMessageHistory(modelMessages, 10);
 
   await persistUiMessages(chatId, userId, getInboundUserMessages(messages));
 
   const result = streamText({
     model: openrouter(resolveModelForMode("thinkly")),
     system: thinklySystemPrompt() + memorySnippet,
-    messages: await convertToModelMessages(modelMessages),
+    messages: await convertToModelMessages(truncatedMessages),
     maxOutputTokens: resolveMaxOutputTokens(),
     temperature: 0.3,
     abortSignal: request.signal,

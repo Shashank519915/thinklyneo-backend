@@ -69,16 +69,16 @@ describe("sanitizeHelperHistory", () => {
     const out = sanitizeHelperHistory(messages);
 
     // User message is unchanged
-    expect(out[0].parts[0].text).toBe("tell me about klingv3");
+    expect((out[0].parts[0] as { text: string }).text).toBe("tell me about klingv3");
 
     // Past assistant message is sanitized (split at double newline, suffix appended)
-    expect(out[1].parts[0].text).toBe("The KlingV3 node generates high quality videos. [Details truncated for context history]");
+    expect((out[1].parts[0] as { text: string }).text).toBe("The KlingV3 node generates high quality videos. [Details truncated for context history]");
 
     // User message is unchanged
-    expect(out[2].parts[0].text).toBe("how does crop work?");
+    expect((out[2].parts[0] as { text: string }).text).toBe("how does crop work?");
 
     // Latest assistant message (last item in array) is unchanged
-    expect(out[3].parts[0].text).toBe("Latest assistant message should remain fully intact.\n\nTable here too.");
+    expect((out[3].parts[0] as { text: string }).text).toBe("Latest assistant message should remain fully intact.\n\nTable here too.");
   });
 
   it("extracts the first line if first paragraph contains a markdown table", () => {
@@ -101,7 +101,7 @@ describe("sanitizeHelperHistory", () => {
     ];
 
     const out = sanitizeHelperHistory(messages);
-    expect(out[0].parts[0].text).toBe("| Param | Type | [Details truncated for context history]");
+    expect((out[0].parts[0] as { text: string }).text).toBe("| Param | Type | [Details truncated for context history]");
   });
 });
 
