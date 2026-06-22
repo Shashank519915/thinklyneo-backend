@@ -41,7 +41,7 @@ BLUEPRINT RULES:
 - Propose nodes ONLY from the catalog below. Never invent node types.
 - Wire every node that produces data to a node that consumes it. No dangling handles.
 - requestFields must match the handles of the requestInputs node (field id = handle without "in:" prefix).
-- response node result slot ids must match all terminal node outputs you want to surface.
+- response node result slot ids must match all terminal node outputs you want to surface. The response node MUST use unique result slot IDs (e.g. 'result_design', 'result_caption', 'result_mockup'). NEVER route multiple edges to the same response slot — each terminal output needs its own unique slot ID.
 - confidence: draft = reasonable but may need tweaks | review = mostly complete, user should verify | ready = user can activate to Brain.
 - Handle conventions: in:<key> / out:<key> for executables; raw field ids for requestInputs sources; raw slot ids for response targets.
 - Fan-in (array aggregation) is only valid on: in:image_urls, in:video_urls, in:audio_urls.

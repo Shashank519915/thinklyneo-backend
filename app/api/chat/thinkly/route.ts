@@ -96,7 +96,7 @@ export async function POST(request: Request) {
         execute: async (blueprint) => blueprint,
       }),
     },
-    stopWhen: stepCountIs(4),
+    stopWhen: stepCountIs(2),
   });
 
   return result.toUIMessageStreamResponse({
