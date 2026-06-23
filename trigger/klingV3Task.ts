@@ -29,7 +29,9 @@ interface KlingV3Payload {
   elements?: KlingV3Element[];
   // Shared fields
   duration?: string;
+  duration_text?: string;
   negative_prompt?: string;
+  negative_prompt_text?: string;
   // Settings
   cfg_scale?: number;
   generate_audio?: boolean;
@@ -52,8 +54,10 @@ export const klingV3Task = task({
       description,
       end_image_url,
       elements,
-      duration = "5",
+      duration,
+      duration_text,
       negative_prompt,
+      negative_prompt_text,
       cfg_scale,
       generate_audio,
       runId,
@@ -66,10 +70,12 @@ export const klingV3Task = task({
     // Determine effective prompt: image tab uses "description", text tab uses "prompt"
     const effectivePrompt = description || prompt || "";
     const isImageToVideo = !!(start_image_url || description);
+    const finalDuration = duration || duration_text || "5";
+    const finalNegativePrompt = negative_prompt || negative_prompt_text || undefined;
 
     console.log(
       `[KlingV3Task] Starting kling-v3 (nodeRunId: ${nodeRunId}, mode: ${isImageToVideo ? "image-to-video" : "text-to-video"}, ` +
-      `aspect_ratio: ${aspect_ratio}, duration: ${duration}s, ` +
+      `aspect_ratio: ${aspect_ratio}, duration: ${finalDuration}s, ` +
       `start_image_url: "${start_image_url ?? ""}", elements: ${elements?.length ?? 0})`
     );
 
@@ -83,8 +89,8 @@ export const klingV3Task = task({
         start_image_url,
         end_image_url,
         elements,
-        duration,
-        negative_prompt,
+        duration: finalDuration,
+        negative_prompt: finalNegativePrompt,
         cfg_scale,
         generate_audio,
       },
