@@ -18,7 +18,9 @@ export const klingV3InputSchema = z.object({
   elements: z.array(klingElementSchema).optional(),
   // Shared fields
   duration: z.string().optional(),
+  duration_text: z.string().optional(),
   negative_prompt: z.string().optional(),
+  negative_prompt_text: z.string().optional(),
   // Settings
   cfg_scale: z.number().min(0).max(1).optional(),
   generate_audio: z.boolean().optional(),

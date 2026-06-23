@@ -553,8 +553,8 @@ async function triggerReadyNodes(params: TriggerReadyNodesParams) {
           end_image_url: (resolvedInputs["end_image_url"] as string) || undefined,
           elements: (resolvedInputs["elements"] as any) || undefined,
           // Shared
-          duration: (resolvedInputs["duration"] as string) ?? "5",
-          negative_prompt: (resolvedInputs["negative_prompt"] as string) || undefined,
+          duration: (resolvedInputs["duration"] as string) ?? (resolvedInputs["duration_text"] as string) ?? "5",
+          negative_prompt: (resolvedInputs["negative_prompt"] as string) ?? (resolvedInputs["negative_prompt_text"] as string) ?? undefined,
           // Settings
           cfg_scale: resolvedInputs["cfg_scale"] != null ? Number(resolvedInputs["cfg_scale"]) : undefined,
           generate_audio: resolvedInputs["generate_audio"] != null ? Boolean(resolvedInputs["generate_audio"]) : undefined,
