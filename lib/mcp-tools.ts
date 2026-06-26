@@ -127,7 +127,7 @@ export const MCP_TOOLS = [
         requestFields: {
           type: "array",
           description:
-            'Optional Request-Inputs fields to seed (mostly for an empty canvas). Each: { type, label?, value?, id?, selectOptions?, numberMin?, numberMax?, numberStep?, mediaMaxCount? }. type is one of text_field/select_field/number_field/boolean_field/image_field/audio_field/video_field/media_field/file_field. select_field MUST include selectOptions: [{ label, value }] with EXACT value strings from get_model_schema for the target you will wire to (e.g. gptImage2 in:size → 3840x2160, NOT 16:9). Set text/select/number values; LEAVE media fields empty. Wire fields that should drive nodes via connect_nodes (sets linkedTarget); unwired fields are optional run-time context only.',
+            'Optional Request-Inputs fields to seed (mostly for an empty canvas). Each: { type, label?, value?, id?, selectOptions?, numberMin?, numberMax?, numberStep?, mediaMaxCount? }. type is one of text_field/select_field/slider_field/number_field/boolean_field/image_field/audio_field/video_field/media_field/file_field. select_field MUST include selectOptions: [{ label, value }] with EXACT value strings from get_model_schema for the target you will wire to (e.g. gptImage2 in:size → 3840x2160, NOT 16:9). Set text/select/number values; LEAVE media fields empty. Wire fields that should drive nodes via connect_nodes (sets linkedTarget); unwired fields are optional run-time context only.',
           items: { type: "object" },
         },
       },

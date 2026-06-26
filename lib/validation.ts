@@ -12,6 +12,7 @@ export const requestFieldSchema = z.object({
     .enum([
       "text_field",
       "select_field",
+      "slider_field",
       "number_field",
       "boolean_field",
       "image_field",
