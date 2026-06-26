@@ -6,36 +6,7 @@ import { auth } from "@clerk/nextjs/server";
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { createWorkflowSchema } from "@/lib/validation";
-
-const DEFAULT_NODES = [
-  {
-    id: "request-inputs",
-    type: "requestInputs",
-    position: { x: 100, y: 250 },
-    data: {
-      label: "Request-Inputs",
-      fields: [
-        {
-          id: "field_text_default",
-          type: "text_field",
-          label: "text_field",
-          value: "",
-        },
-      ],
-    },
-  },
-  {
-    id: "response",
-    type: "response",
-    position: { x: 700, y: 250 },
-    data: {
-      label: "Output",
-      results: []
-    },
-  },
-];
-
-const DEFAULT_EDGES: unknown[] = [];
+import { resolveWorkflowGraph } from "@/lib/workflow-templates";
 
 /** Ensures Clerk user exists, then returns workflows with run counts (newest first). */
 export async function GET() {
@@ -79,7 +50,7 @@ export async function GET() {
   }
 }
 
-/** Creates workflow with seeded Request-Inputs + Response nodes and empty edges. */
+/** Creates workflow with template seeded nodes/edges. */
 export async function POST(request: Request) {
   const { userId } = await auth();
   if (!userId) {
@@ -104,13 +75,42 @@ export async function POST(request: Request) {
       create: { id: userId },
     });
 
+    const { nodes, edges } = resolveWorkflowGraph({
+      template: parsed.data.template,
+      productBrief: parsed.data.productBrief,
+    });
+
+    // Optionally seed Request-Inputs fields (e.g. agent-defined inputs for an empty canvas).
+    if (parsed.data.requestFields?.length) {
+      const ri = (nodes as Array<{ type: string; data?: Record<string, unknown> }>).find(
+        (n) => n.type === "requestInputs"
+      );
+      if (ri) {
+        ri.data = ri.data ?? {};
+        ri.data.fields = parsed.data.requestFields.map((f, i) => {
+          const type = f.type ?? "text_field";
+          return {
+            id: f.id ?? `field_${type.replace("_field", "")}_${i + 1}`,
+            type,
+            label: f.label ?? type,
+            value: f.value ?? (type === "text_field" || type === "select_field" ? "" : null),
+            ...(f.selectOptions?.length ? { selectOptions: f.selectOptions } : {}),
+            ...(f.numberMin !== undefined ? { numberMin: f.numberMin } : {}),
+            ...(f.numberMax !== undefined ? { numberMax: f.numberMax } : {}),
+            ...(f.numberStep !== undefined ? { numberStep: f.numberStep } : {}),
+            ...(f.mediaMaxCount !== undefined ? { mediaMaxCount: f.mediaMaxCount } : {}),
+          };
+        });
+      }
+    }
+
     const workflow = await prisma.workflow.create({
       data: {
         userId,
         name: parsed.data.name,
         description: parsed.data.description ?? null,
-        nodes: DEFAULT_NODES as unknown as Parameters<typeof prisma.workflow.create>[0]["data"]["nodes"],
-        edges: DEFAULT_EDGES as unknown as Parameters<typeof prisma.workflow.create>[0]["data"]["edges"],
+        nodes: nodes as any,
+        edges: edges as any,
         status: "idle",
       },
     });
