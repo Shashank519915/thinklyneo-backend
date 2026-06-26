@@ -75,7 +75,7 @@ export function getHandleDataType(
     if (segments.includes("audio")) return "audio";
     if (segments.includes("media")) return "media";
     if (segments.includes("file")) return "file";
-    if (segments.includes("slider")) return "number";
+    if (segments.includes("slider")) return "slider";
     if (segments.includes("number")) return "number";
     if (segments.includes("boolean")) return "boolean";
     if (segments.includes("select")) return "text";
@@ -126,7 +126,7 @@ export function getHandleDataType(
   if (handleId.includes("prompt") || handleId === "in:prompt" || handleId === "in:systemPrompt") return "text";
   if (handleId === "out:response") return "text";
   if (handleId === "in:x" || handleId === "in:y" || handleId === "in:w" || handleId === "in:h")
-    return "number";
+    return "slider";
 
   if (nodeType === "cropImage") return "image";
   if (nodeType === "gemini") return "text";
@@ -150,8 +150,19 @@ export function isValidConnection(
 
   if (sourceType === "generic" || targetType === "generic") return true;
   if (targetType === "response") return true;
-  if ((targetHandle === "in:images" || targetHandle === "in:image_urls") && sourceType === "image") return true;
+  if (
+    (targetHandle === "in:images" || targetHandle === "in:image_urls") &&
+    sourceType === "image"
+  )
+    return true;
   if (targetHandle === "in:video_urls" && sourceType === "video") return true;
   if (targetHandle === "in:audio_urls" && sourceType === "audio") return true;
+
+  const isNumeric = (t: string) => t === "number" || t === "slider";
+  const isTextual = (t: string) => t === "text" || t === "select";
+
+  if (isNumeric(sourceType) && isNumeric(targetType)) return true;
+  if (isTextual(sourceType) && isTextual(targetType)) return true;
+
   return sourceType === targetType;
 }
