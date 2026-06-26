@@ -249,6 +249,7 @@ export function buildScaffoldNodeSummaries() {
       fieldTypes: [
         "text_field",
         "select_field",
+        "slider_field",
         "number_field",
         "boolean_field",
         "image_field",
@@ -260,7 +261,7 @@ export function buildScaffoldNodeSummaries() {
       selectFieldRules:
         "select_field REQUIRES selectOptions: [{ label, value }] copied EXACTLY from get_model_schema (selectInputsExactValues / inputs[].options). Values must match the target node's input key — e.g. gptImage2 `in:size` wants 3840x2160, NOT 16:9. Prefer update_node defaults for node params the user does not need at run time. Wire fields you create to in:<key> handles, OR leave unwired as optional run-time context (harmless).",
       fieldIdNamingRule:
-        "CRITICAL: Field IDs are parsed by splitting on '_' — the segment immediately after 'field_' MUST be the exact field type keyword (image|video|audio|media|file|number|boolean|select|text). Examples: field_image_photo ✓, field_image_ref ✓, field_video_clip ✓, field_text_prompt ✓. NEVER use descriptive words as the second segment if they accidentally contain a type keyword — e.g. field_texture_1 is WRONG because it contains 'text' as a substring but the second segment is 'texture' not 'text', causing a type mismatch. Always use field_image_<suffix> for image_field, field_video_<suffix> for video_field, etc.",
+        "CRITICAL: Field IDs are parsed by splitting on '_' — the segment immediately after 'field_' MUST be the exact field type keyword (image|video|audio|media|file|number|slider|boolean|select|text). Examples: field_image_photo ✓, field_image_ref ✓, field_video_clip ✓, field_text_prompt ✓, field_slider_scale ✓. NEVER use descriptive words as the second segment if they accidentally contain a type keyword — e.g. field_texture_1 is WRONG because it contains 'text' as a substring but the second segment is 'texture' not 'text', causing a type mismatch. Always use field_image_<suffix> for image_field, field_video_<suffix> for video_field, etc.",
       rules:
         "Exactly one per workflow. Cannot be deleted. Leave media field values null — the user uploads media later via upload_file, then update_node. connect_nodes from a field sets linkedTarget (canvas Add to request parity) and syncs the field value to the target input.",
     },

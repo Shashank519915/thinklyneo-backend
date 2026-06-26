@@ -75,6 +75,7 @@ export function getHandleDataType(
     if (segments.includes("audio")) return "audio";
     if (segments.includes("media")) return "media";
     if (segments.includes("file")) return "file";
+    if (segments.includes("slider")) return "number";
     if (segments.includes("number")) return "number";
     if (segments.includes("boolean")) return "boolean";
     if (segments.includes("select")) return "text";
