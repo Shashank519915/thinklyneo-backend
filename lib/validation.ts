@@ -44,7 +44,20 @@ export const requestFieldSchema = z.object({
 export const createWorkflowSchema = z.object({
   name: z.string().min(1).max(120),
   description: z.string().max(5000).optional(),
-  template: z.enum(["empty", "advertisement"]).optional(),
+  template: z
+    .enum([
+      "empty",
+      "advertisement",
+      "youtubeShorts",
+      "audioDubbing",
+      "podcastTeaser",
+      "newsSummarizer",
+      "cinematicTeaser",
+      "socialMediaCampaign",
+      "voiceoverVideo",
+      "videoLocalizer",
+    ])
+    .optional(),
   productBrief: z.string().max(5000).optional(),
   /** Optional Request-Inputs fields to seed (text/select/number values only; leave media empty). */
   requestFields: z.array(requestFieldSchema).max(20).optional(),

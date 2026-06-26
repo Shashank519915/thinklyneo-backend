@@ -115,9 +115,9 @@ export const MCP_TOOLS = [
         },
         template: {
           type: "string",
-          enum: ["empty", "advertisement"],
+          enum: ["empty", "advertisement", "youtubeShorts", "audioDubbing", "podcastTeaser", "newsSummarizer"],
           description:
-            'Graph scaffold. "advertisement" = marketing pipeline (crop images + copy + social post). "empty" = Request-Inputs + Response only.',
+            'Graph scaffold. "advertisement" = marketing pipeline; "youtubeShorts" = script + video + audio merge; "audioDubbing" = raw audio extract + translate + summary; "podcastTeaser" = crop watermark + extract audio + teaser LLM; "newsSummarizer" = crop banner + summary LLM + GPT illustration; "empty" = Request-Inputs + Response only.',
         },
         productBrief: {
           type: "string",

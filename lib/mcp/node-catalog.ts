@@ -317,6 +317,15 @@ export function listNodeTypes(category?: string) {
   };
 }
 
+const TEMPLATE_DESCRIPTIONS: Record<string, string> = {
+  empty: "Blank canvas: Request-Inputs + Response only.",
+  advertisement: "Marketing pipeline: crop product images + LLM copywriting → hook → final social post. Pass productBrief when creating.",
+  youtubeShorts: "YouTube Shorts Creator: script LLM + kling backing video + backing music AV merge.",
+  audioDubbing: "Audio Dubber: extract audio → translate to target language text → summarize transcript.",
+  podcastTeaser: "Podcast Teaser Creator: Crop Watermark logo + extract audio + teaser writer.",
+  newsSummarizer: "News Summarizer: Crop Banner + Summarize text article + GPT illustration image generator.",
+};
+
 /** Pre-built system workflow templates the agent can scaffold from (read-only). */
 export function listSystemWorkflows() {
   return WORKFLOW_TEMPLATES.map((template) => {
@@ -327,10 +336,8 @@ export function listSystemWorkflows() {
       nodeCount: graph.nodes.length,
       edgeCount: graph.edges.length,
       nodeTypes,
-      description:
-        template === "advertisement"
-          ? "Marketing pipeline: crop product images + LLM copywriting → hook → final social post. Pass productBrief when creating."
-          : "Blank canvas: Request-Inputs + Response only.",
+      description: TEMPLATE_DESCRIPTIONS[template] || "System workflow template.",
     };
   });
 }
+
